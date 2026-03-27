@@ -186,6 +186,7 @@ const PLAYER_IDS = {
   "Cal Raleigh":         663728,
   "Junior Caminero":     691406,
   "Jo Adell":            666176,
+  "Joe Adell":           666176,
   "Bryce Harper":        547180,
   "Hunter Goodman":      678882,
   "Ben Rice":            700250,
@@ -209,6 +210,7 @@ const PLAYER_IDS = {
   "Corey Seager":        608369,
   "Elly De La Cruz":     682829,
   "Caleb Durbin":        702332,
+  "Caleb Durin":         702332,
   // Brexton & Diego - HSBISOFB
   "Teoscar Hernandez":   606192,
   "Max Muncy":           571970,
@@ -270,6 +272,12 @@ let S = {
 
 function set(partial) { S = {...S, ...partial}; render(); }
 
+// Correct known misspellings from old Firebase data
+const NAME_CORRECTIONS = {
+  "Joe Adell": "Jo Adell",
+  "Caleb Durin": "Caleb Durbin",
+};
+
 // Listen to Firebase for real-time updates
 // We always use HARDCODED_TEAMS for names/structure, but merge saved stats on top
 onSnapshot(leagueRef, snap => {
@@ -305,7 +313,10 @@ onSnapshot(leagueRef, snap => {
         // Also append any added (transaction) players beyond the base 8
         if(saved.players?.length > team.players.length) {
           const extra = saved.players.slice(team.players.length);
-          extra.forEach(ep => team.players.push(ep));
+          extra.forEach(ep => {
+            ep.name = NAME_CORRECTIONS[ep.name] || ep.name;
+            team.players.push(ep);
+          });
         }
       });
       set({ teams: merged, lastUpdated: data.lastUpdated||null });
