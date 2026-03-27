@@ -411,6 +411,7 @@ function buildStandings() {
     h("span",{style:{fontSize:"11px",color:C.muted}},"Tap a team for roster")
   );
   wrap.appendChild(hdr);
+  const maxScore = Math.max(...sorted.map(t=>score(t)),1);
   const table = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",overflow:"hidden",marginBottom:"20px"}});
   table.appendChild(h("div",{style:{display:"grid",gridTemplateColumns:"40px 1fr 60px",padding:"10px 20px",borderBottom:`1px solid ${C.border}`,background:C.surface}},
     h("span",{style:{color:C.muted,fontSize:"11px",textTransform:"uppercase",letterSpacing:"0.08em"}},"#"),
@@ -418,19 +419,22 @@ function buildStandings() {
     h("span",{style:{color:C.muted,fontSize:"11px",textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"right"}},"PTS")
   ));
   sorted.forEach((team,i)=>{
-    const row = h("div",{
-      class:"row-hover",
-      style:{display:"grid",gridTemplateColumns:"40px 1fr 60px",alignItems:"center",padding:"14px 20px",borderBottom:i<sorted.length-1?`1px solid ${C.border}`:"none",cursor:"pointer",background:i===0?`${C.accent}11`:"transparent",transition:"background 0.15s"},
-      onClick:()=>set({selectedTeam:team})
-    },
+    const teamScore = score(team);
+    const pct = (teamScore/maxScore)*100;
+    const wrapper = h("div",{style:{borderBottom:i<sorted.length-1?`1px solid ${C.border}`:"none",background:i===0?`${C.accent}11`:"transparent",transition:"background 0.15s",cursor:"pointer"},onClick:()=>set({selectedTeam:team})});
+    wrapper.classList.add("row-hover");
+    const row = h("div",{style:{display:"grid",gridTemplateColumns:"40px 1fr 60px",alignItems:"center",padding:"14px 20px 8px"}},
       h("span",{style:{fontSize:rankSize(i),color:C.muted,fontWeight:"700"}}, rankIcon(i)),
       h("div",{},
         h("div",{style:{color:C.text,fontWeight:"600",fontSize:"15px"}},team.name),
         team.owner?h("div",{style:{color:C.muted,fontSize:"11px"}},team.owner):null
       ),
-      h("span",{style:{color:C.accent,fontWeight:"800",fontSize:"22px",textAlign:"right",fontFamily:"'Bebas Neue', sans-serif"}},score(team))
+      h("span",{style:{color:C.accent,fontWeight:"800",fontSize:"22px",textAlign:"right",fontFamily:"'Bebas Neue', sans-serif"}},teamScore)
     );
-    table.appendChild(row);
+    const barWrap = h("div",{style:{margin:"0 20px 10px",height:"4px",background:C.bg,borderRadius:"2px",overflow:"hidden"}});
+    barWrap.appendChild(h("div",{style:{height:"100%",width:`${pct}%`,background:i===0?`linear-gradient(90deg,${C.accent},${C.red})`:`${C.accent}66`,borderRadius:"2px",transition:"width 0.6s ease"}}));
+    wrapper.append(row, barWrap);
+    table.appendChild(wrapper);
   });
   wrap.appendChild(table);
   const leg = h("div",{style:{display:"flex",gap:"16px",fontSize:"12px",color:C.muted,flexWrap:"wrap"}});
@@ -443,47 +447,7 @@ function buildStandings() {
 
 // ── Leaderboard ───────────────────────────────────────────────────────────────
 function buildLeaderboard() {
-  const sorted = [...S.teams].sort((a,b)=>teamHR(b)-teamHR(a));
-  const lastIdx = sorted.length - 1;
-  const maxHR = Math.max(...sorted.map(teamHR),1);
-  function rankIcon(i) {
-    if(i === 0) return "🥇";
-    if(i === 1) return "💀";
-    if(i === lastIdx) return "💀";
-    return `#${i+1}`;
-  }
-  function rankSize(i) { return (i===0||i===1||i===lastIdx) ? "22px" : "14px"; }
   const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
-
-  wrap.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}},
-    h("span",{style:{fontSize:"20px"}},"💣"),
-    h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Team Home Run Rankings")
-  ));
-
-  const cards = h("div",{style:{display:"flex",flexDirection:"column",gap:"10px",marginBottom:"32px"}});
-  sorted.forEach((team,i)=>{
-    const hrs=teamHR(team), hbps=teamHBP(team), pct=(hrs/maxHR)*100;
-    const card = h("div",{style:{background:C.card,border:`1px solid ${i===0?C.accent+"55":C.border}`,borderRadius:"12px",padding:"14px 18px",boxShadow:i===0?`0 0 20px ${C.accent}18`:"none"}});
-    const topRow = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}});
-    topRow.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"10px"}},
-      h("span",{style:{fontSize:rankSize(i),minWidth:"28px",fontWeight:"700",color:C.muted}},rankIcon(i)),
-      h("div",{},
-        h("div",{style:{color:C.text,fontWeight:"700",fontSize:"15px"}},team.name),
-        team.owner?h("div",{style:{color:C.muted,fontSize:"11px"}},team.owner):null
-      )
-    ));
-    const right = h("div",{style:{display:"flex",alignItems:"baseline",gap:"6px"}},
-      h("span",{style:{color:C.red,fontFamily:"'Bebas Neue', sans-serif",fontSize:"32px",fontWeight:"800",lineHeight:"1"}},hrs),
-      h("span",{style:{color:C.muted,fontSize:"11px",textTransform:"uppercase"}},"HR")
-    );
-    if(hbps>0) right.appendChild(h("span",{style:{color:C.muted,fontSize:"12px",marginLeft:"4px"}},`+${hbps} HBP`));
-    topRow.appendChild(right);
-    const barWrap = h("div",{style:{height:"6px",background:C.bg,borderRadius:"3px",overflow:"hidden"}});
-    barWrap.appendChild(h("div",{style:{height:"100%",width:`${pct}%`,background:i===0?`linear-gradient(90deg,${C.accent},${C.red})`:`${C.red}88`,borderRadius:"3px",transition:"width 0.6s ease"}}));
-    card.append(topRow,barWrap);
-    cards.appendChild(card);
-  });
-  wrap.appendChild(cards);
 
   // Top Points Leaders (HR + HBP players combined, top 20)
   const all=[];
@@ -920,7 +884,7 @@ function render() {
   app.appendChild(header);
 
   // Tabs
-  const tabs=[{id:"standings",label:"🏆 Standings"},{id:"rosters",label:"📋 Rosters"},{id:"leaderboard",label:"💣 HR Leaderboard"},{id:"yesterday",label:"📅 Yesterday"},{id:"debug",label:"🔍 Debug"}];
+  const tabs=[{id:"standings",label:"🏆 Standings"},{id:"rosters",label:"📋 Rosters"},{id:"leaderboard",label:"📊 Leaderboard"},{id:"yesterday",label:"📅 Yesterday"},{id:"debug",label:"🔍 Debug"}];
   const tabBar=h("div",{style:{borderBottom:`1px solid ${C.border}`,background:C.surface}});
   const tabInner=h("div",{style:{maxWidth:"640px",margin:"0 auto",display:"flex",padding:"0 16px",overflowX:"auto"}});
   tabs.forEach(tab=>{
