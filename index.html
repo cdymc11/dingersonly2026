@@ -397,7 +397,14 @@ function playerName(p) {
 // ── Standings ─────────────────────────────────────────────────────────────────
 function buildStandings() {
   const sorted = [...S.teams].sort((a,b)=>score(b)-score(a));
-  const medals = ["🥇","🥈","🥉"];
+  const lastIdx = sorted.length - 1;
+  function rankIcon(i) {
+    if(i === 0) return "🥇";
+    if(i === 1) return "💀";
+    if(i === lastIdx) return "💀";
+    return `#${i+1}`;
+  }
+  function rankSize(i) { return (i===0||i===1||i===lastIdx) ? "20px" : "14px"; }
   const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
   const hdr = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"}},
     h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Standings"),
@@ -416,7 +423,7 @@ function buildStandings() {
       style:{display:"grid",gridTemplateColumns:"40px 1fr 60px",alignItems:"center",padding:"14px 20px",borderBottom:i<sorted.length-1?`1px solid ${C.border}`:"none",cursor:"pointer",background:i===0?`${C.accent}11`:"transparent",transition:"background 0.15s"},
       onClick:()=>set({selectedTeam:team})
     },
-      h("span",{style:{fontSize:i<3?"20px":"14px",color:C.muted,fontWeight:"700"}}, i<3?medals[i]:`#${i+1}`),
+      h("span",{style:{fontSize:rankSize(i),color:C.muted,fontWeight:"700"}}, rankIcon(i)),
       h("div",{},
         h("div",{style:{color:C.text,fontWeight:"600",fontSize:"15px"}},team.name),
         team.owner?h("div",{style:{color:C.muted,fontSize:"11px"}},team.owner):null
@@ -437,8 +444,15 @@ function buildStandings() {
 // ── Leaderboard ───────────────────────────────────────────────────────────────
 function buildLeaderboard() {
   const sorted = [...S.teams].sort((a,b)=>teamHR(b)-teamHR(a));
+  const lastIdx = sorted.length - 1;
   const maxHR = Math.max(...sorted.map(teamHR),1);
-  const medals = ["🥇","🥈","🥉"];
+  function rankIcon(i) {
+    if(i === 0) return "🥇";
+    if(i === 1) return "💀";
+    if(i === lastIdx) return "💀";
+    return `#${i+1}`;
+  }
+  function rankSize(i) { return (i===0||i===1||i===lastIdx) ? "22px" : "14px"; }
   const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
 
   wrap.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}},
@@ -452,7 +466,7 @@ function buildLeaderboard() {
     const card = h("div",{style:{background:C.card,border:`1px solid ${i===0?C.accent+"55":C.border}`,borderRadius:"12px",padding:"14px 18px",boxShadow:i===0?`0 0 20px ${C.accent}18`:"none"}});
     const topRow = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"10px"}});
     topRow.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"10px"}},
-      h("span",{style:{fontSize:i<3?"22px":"14px",minWidth:"28px",fontWeight:"700",color:C.muted}},i<3?medals[i]:`#${i+1}`),
+      h("span",{style:{fontSize:rankSize(i),minWidth:"28px",fontWeight:"700",color:C.muted}},rankIcon(i)),
       h("div",{},
         h("div",{style:{color:C.text,fontWeight:"700",fontSize:"15px"}},team.name),
         team.owner?h("div",{style:{color:C.muted,fontSize:"11px"}},team.owner):null
