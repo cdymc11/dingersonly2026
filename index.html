@@ -271,10 +271,45 @@ let S = {
 function set(partial) { S = {...S, ...partial}; render(); }
 
 // Listen to Firebase for real-time updates
+// We always use HARDCODED_TEAMS for names/structure, but merge saved stats on top
 onSnapshot(leagueRef, snap => {
   if(snap.exists()) {
     const data = snap.data();
-    if(data.teams?.length > 0) set({ teams: data.teams, lastUpdated: data.lastUpdated||null });
+    if(data.teams?.length > 0) {
+      // Build a lookup of saved player stats keyed by player ID or position
+      const merged = JSON.parse(JSON.stringify(HARDCODED_TEAMS));
+      merged.forEach(team => {
+        const saved = data.teams.find(t => t.id === team.id);
+        if(!saved) return;
+        // Copy transaction/stat fields from saved team
+        team.hasUsedTransaction = saved.hasUsedTransaction || false;
+        // Match players by index (same draft order), copy stats over
+        team.players.forEach((p, i) => {
+          const sp = saved.players?.[i];
+          if(!sp) return;
+          if(p.type === "hr") {
+            p.effectiveHR = sp.effectiveHR || 0;
+            p.hrBaseline = sp.hrBaseline ?? null;
+            p.droppedAt = sp.droppedAt || null;
+            p.addedAt = sp.addedAt || null;
+            p.teamAbbr = sp.teamAbbr || null;
+          }
+          if(p.type === "hbp") {
+            p.effectiveHBP = sp.effectiveHBP || 0;
+            p.hbpBaseline = sp.hbpBaseline ?? null;
+            p.droppedAt = sp.droppedAt || null;
+            p.addedAt = sp.addedAt || null;
+            p.teamAbbr = sp.teamAbbr || null;
+          }
+        });
+        // Also append any added (transaction) players beyond the base 8
+        if(saved.players?.length > team.players.length) {
+          const extra = saved.players.slice(team.players.length);
+          extra.forEach(ep => team.players.push(ep));
+        }
+      });
+      set({ teams: merged, lastUpdated: data.lastUpdated||null });
+    }
   }
 });
 
