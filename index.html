@@ -326,8 +326,13 @@ onSnapshot(leagueRef, snap => {
 
 async function saveToFirebase(teams) {
   const now = new Date().toISOString();
-  await setDoc(leagueRef, { teams, lastUpdated: now });
-  set({ teams, lastUpdated: now });
+  // Always enforce hardcoded team names before saving
+  const corrected = teams.map(t => {
+    const hc = HARDCODED_TEAMS.find(h => h.id === t.id);
+    return hc ? { ...t, name: hc.name, owner: hc.owner } : t;
+  });
+  await setDoc(leagueRef, { teams: corrected, lastUpdated: now });
+  set({ teams: corrected, lastUpdated: now });
 }
 
 // ── MLB Stats refresh ─────────────────────────────────────────────────────────
