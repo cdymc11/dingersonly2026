@@ -144,16 +144,98 @@ function teamHBP(team){ return (team.players||[]).filter(p=>p.type==="hbp").redu
 function fmtDate(iso){ if(!iso)return"—"; return new Date(iso).toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
 function fmtTime(iso){ if(!iso)return""; return new Date(iso).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
 
+// Hardcoded MLB IDs for all drafted players — bypasses name search entirely
+const PLAYER_IDS = {
+  // Austin - Vinnie Bombinos
+  "Shohei Ohtani":       660271,
+  "Bobby Witt Jr.":      677951,
+  "Riley Greene":        682985,
+  "Ketel Marte":         606466,
+  "Vinnie Pasquantino":  686469,
+  "Kazuma Okamoto":      672960,
+  "Mike Trout":          545361,
+  "Heliot Ramos":        671218,
+  // Jared - Only God Can Judge Me
+  "Aaron Judge":         592450,
+  "Brent Rooker":        667670,
+  "Fernando Tatis Jr.":  665487,
+  "Kyle Tucker":         663656,
+  "Munetaka Murakami":   808959,
+  "Byron Buxton":        621439,
+  "Taylor Ward":         621493,
+  "Pete Crow-Armstrong": 691718,
+  // Shaun
+  "Matt Olson":          621566,
+  "Gunnar Henderson":    683002,
+  "Ronald Acuna Jr.":    660670,
+  "Rafael Devers":       646240,
+  "Adolis Garcia":       666969,
+  "Christian Walker":    572233,
+  "Jake Burger":         669394,
+  "Ty France":           664034,
+  // Cody - Caglianone In A Million
+  "Kyle Schwarber":      656941,
+  "Eugenio Suarez":      553993,
+  "Yordan Alvarez":      670541,
+  "Spencer Torkelson":   679529,
+  "Colson Montgomery":   695657,
+  "Daulton Varsho":      662139,
+  "Jac Caglianone":      695506,
+  "Randy Arozarena":     668227,
+  // Mark - Machado Man Randy Slamage
+  "Cal Raleigh":         663728,
+  "Junior Caminero":     691406,
+  "Jo Adell":            666176,
+  "Bryce Harper":        547180,
+  "Hunter Goodman":      678882,
+  "Ben Rice":            700250,
+  "Manny Machado":       592518,
+  "Zach Neto":           687263,
+  // Doug - Doug's Dinger Dynasty
+  "Nick Kurtz":          701762,
+  "Vladimir Guerrero Jr.": 665489,
+  "Jose Ramirez":        608070,
+  "Shea Langeliers":     669127,
+  "Jazz Chisholm Jr.":   665750,
+  "James Wood":          694192,
+  "Wyatt Langford":      694671,
+  "Willson Contreras":   575929,
+  // Brendan - Go, Diego, Go!
+  "Juan Soto":           665742,
+  "Pete Alonso":         624413,
+  "Julio Rodriguez":     677594,
+  "Austin Riley":        663586,
+  "Michael Busch":       686668,
+  "Corey Seager":        608369,
+  "Elly De La Cruz":     682829,
+  "Caleb Durbin":        702332,
+  // Brexton & Diego - HSBISOFB
+  "Teoscar Hernandez":   606192,
+  "Max Muncy":           571970,
+  "Salvador Perez":      521692,
+  "Freddie Freeman":     518692,
+  "Brandon Lowe":        664040,
+  "Seiya Suzuki":        673548,
+  "Willy Adames":        642715,
+  "CJ Abrams":           682928,
+};
+
 async function fetchStats(name) {
   try {
-    const r = await fetch(`https://statsapi.mlb.com/api/v1/people/search?names=${encodeURIComponent(name)}&sportId=1`);
-    const d = await r.json();
-    const person = d.people?.[0]; if(!person) return null;
+    let playerId = PLAYER_IDS[name] || null;
+    let fullName = name;
+    if (!playerId) {
+      const r = await fetch(`https://statsapi.mlb.com/api/v1/people/search?names=${encodeURIComponent(name)}&sportId=1`);
+      const d = await r.json();
+      const person = d.people?.[0]; if(!person) return null;
+      playerId = person.id;
+      fullName = person.fullName;
+    }
     const season = new Date().getFullYear();
-    const r2 = await fetch(`https://statsapi.mlb.com/api/v1/people/${person.id}/stats?stats=season&group=hitting&season=${season}&sportId=1`);
+    const r2 = await fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=season&group=hitting&season=${season}&sportId=1`);
     const d2 = await r2.json();
     const split = d2.stats?.[0]?.splits?.[0];
-    return { hr: split?.stat?.homeRuns??0, hbp: split?.stat?.hitByPitch??0, playerId: person.id, teamAbbr: split?.team?.abbreviation??null };
+    return { hr: split?.stat?.homeRuns??0, hbp: split?.stat?.hitByPitch??0, playerId, teamAbbr: split?.team?.abbreviation??null };
   } catch { return null; }
 }
 
@@ -492,18 +574,22 @@ async function runDebug() {
     for(const p of (team.players||[])) {
       if(!p.name?.trim()) continue;
       try {
-        const r = await fetch(`https://statsapi.mlb.com/api/v1/people/search?names=${encodeURIComponent(p.name)}&sportId=1`);
-        const d = await r.json();
-        const person = d.people?.[0];
-        if(!person){ out.push({name:p.name,fantasyTeam:team.name,status:"❌ Not found",detail:"No player matched this name",hr:null,hbp:null,mlbTeam:null}); }
-        else {
-          const season=new Date().getFullYear();
-          const r2=await fetch(`https://statsapi.mlb.com/api/v1/people/${person.id}/stats?stats=season&group=hitting&season=${season}&sportId=1`);
-          const d2=await r2.json();
-          const split=d2.stats?.[0]?.splits?.[0];
-          if(!split) out.push({name:p.name,fantasyTeam:team.name,status:"⚠️ No stats yet",detail:`Found as "${person.fullName}" but no ${season} stats`,hr:null,hbp:null,mlbTeam:null});
-          else out.push({name:p.name,fantasyTeam:team.name,status:"✅ OK",detail:`Matched as "${person.fullName}"`,hr:split.stat?.homeRuns??0,hbp:split.stat?.hitByPitch??0,mlbTeam:split.team?.abbreviation??null});
+        let playerId = PLAYER_IDS[p.name] || null;
+        let matchedName = p.name;
+        if (!playerId) {
+          const r = await fetch(`https://statsapi.mlb.com/api/v1/people/search?names=${encodeURIComponent(p.name)}&sportId=1`);
+          const d = await r.json();
+          const person = d.people?.[0];
+          if(!person){ out.push({name:p.name,fantasyTeam:team.name,status:"❌ Not found",detail:"No player matched this name",hr:null,hbp:null,mlbTeam:null}); set({dbResults:[...out]}); continue; }
+          playerId = person.id;
+          matchedName = person.fullName;
         }
+        const season=new Date().getFullYear();
+        const r2=await fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=season&group=hitting&season=${season}&sportId=1`);
+        const d2=await r2.json();
+        const split=d2.stats?.[0]?.splits?.[0];
+        if(!split) out.push({name:p.name,fantasyTeam:team.name,status:"⚠️ No stats yet",detail:`Found as "${matchedName}" but no ${season} stats`,hr:null,hbp:null,mlbTeam:null});
+        else out.push({name:p.name,fantasyTeam:team.name,status:"✅ OK",detail:`Matched as "${matchedName}"`,hr:split.stat?.homeRuns??0,hbp:split.stat?.hitByPitch??0,mlbTeam:split.team?.abbreviation??null});
       } catch(e){ out.push({name:p.name,fantasyTeam:team.name,status:"💥 Error",detail:String(e),hr:null,hbp:null,mlbTeam:null}); }
       set({dbResults:[...out]});
     }
