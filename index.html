@@ -96,7 +96,7 @@ const HARDCODED_TEAMS = [
   { id:4, name:"Machado Man Randy Slamage", owner:"Mark", hasUsedTransaction:false, players:[
     {name:"Cal Raleigh",      type:"hr",  effectiveHR:0, hrBaseline:null, droppedAt:null, addedAt:null, teamAbbr:null},
     {name:"Junior Caminero",  type:"hr",  effectiveHR:0, hrBaseline:null, droppedAt:null, addedAt:null, teamAbbr:null},
-    {name:"Joe Adell",        type:"hr",  effectiveHR:0, hrBaseline:null, droppedAt:null, addedAt:null, teamAbbr:null},
+    {name:"Jo Adell",         type:"hr",  effectiveHR:0, hrBaseline:null, droppedAt:null, addedAt:null, teamAbbr:null},
     {name:"Bryce Harper",     type:"hr",  effectiveHR:0, hrBaseline:null, droppedAt:null, addedAt:null, teamAbbr:null},
     {name:"Hunter Goodman",   type:"hr",  effectiveHR:0, hrBaseline:null, droppedAt:null, addedAt:null, teamAbbr:null},
     {name:"Ben Rice",         type:"hr",  effectiveHR:0, hrBaseline:null, droppedAt:null, addedAt:null, teamAbbr:null},
@@ -223,18 +223,19 @@ const PLAYER_IDS = {
 async function fetchStats(name) {
   try {
     let playerId = PLAYER_IDS[name] || null;
-    let fullName = name;
     if (!playerId) {
       const r = await fetch(`https://statsapi.mlb.com/api/v1/people/search?names=${encodeURIComponent(name)}&sportId=1`);
+      if (!r.ok) return null;
       const d = await r.json();
       const person = d.people?.[0]; if(!person) return null;
       playerId = person.id;
-      fullName = person.fullName;
     }
     const season = new Date().getFullYear();
     const r2 = await fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=season&group=hitting&season=${season}&sportId=1`);
+    if (!r2.ok) return { hr: 0, hbp: 0, playerId, teamAbbr: null };
     const d2 = await r2.json();
     const split = d2.stats?.[0]?.splits?.[0];
+    // No splits = player found but no stats yet (0 games played) — return zeros
     return { hr: split?.stat?.homeRuns??0, hbp: split?.stat?.hitByPitch??0, playerId, teamAbbr: split?.team?.abbreviation??null };
   } catch { return null; }
 }
