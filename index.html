@@ -581,10 +581,11 @@ function buildUpToBat() {
     ));
     if(S.utbApiAbbrs?.length > 0) {
       wrap.appendChild(h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"10px",padding:"14px",marginTop:"12px"}},
-        h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",marginBottom:"8px"}},"API returned these team abbreviations:"),
-        h("div",{style:{color:C.text,fontSize:"12px",lineHeight:"1.8"}},S.utbApiAbbrs.join(" · ")),
-        h("div",{style:{color:C.muted,fontSize:"11px",marginTop:"8px"}},"Our hardcoded abbrs: LAD KC DET ARI TOR LAA SF NYY ATH SD CHC MIN BAL ATL BOS TEX HOU DET SEA TB PHI COL NYY SD CLE ATH NYY WSH TEX STL NYM SEA ATL CHC TEX CIN BOS LAD KC LAD TB CHC SF WSH")
+        h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",marginBottom:"8px"}},"API debug info:"),
+        h("div",{style:{color:C.text,fontSize:"12px",lineHeight:"1.8",wordBreak:"break-all"}},S.utbApiAbbrs.join(" · "))
       ));
+    } else {
+      wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginTop:"12px",padding:"10px"}},"No API response received — check console for errors."));
     }
   } else {
     // Group by fantasy team
@@ -691,7 +692,7 @@ async function loadUpToBat() {
     const apiAbbrs = games.map(g => `${g.teams?.away?.team?.abbreviation} @ ${g.teams?.home?.team?.abbreviation}`);
     set({utbLoading:false, utbDone:true, utbResults:results, utbApiAbbrs:apiAbbrs});
   } catch(e) {
-    set({utbLoading:false, utbDone:true, utbResults:[]});
+    set({utbLoading:false, utbDone:true, utbResults:[], utbApiAbbrs:[`ERROR: ${e.message}`]});
   }
 }
 
