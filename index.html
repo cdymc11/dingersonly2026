@@ -648,6 +648,9 @@ async function loadUpToBat() {
     if(!schedRes.ok) throw new Error(`Schedule API returned ${schedRes.status}`);
     const schedData = await schedRes.json();
     const games = schedData.dates?.[0]?.games || [];
+    console.log("UTB: games found:", games.length);
+    console.log("UTB: draftedTeams keys:", Object.keys(draftedTeams));
+    games.forEach(g => console.log("UTB: game abbrs:", g.teams?.away?.team?.abbreviation, "@", g.teams?.home?.team?.abbreviation));
 
     const results = [];
     for(const game of games) {
