@@ -565,7 +565,7 @@ function buildUpToBat() {
     h("span",{style:{fontSize:"20px"}},"⚾"),
     h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Up to Bat — Today's Schedule")
   ));
-  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"13px",marginBottom:"20px"}},"See which drafted players have games today, their opponent, and probable pitchers."));
+  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"13px",marginBottom:"20px"}},"Shows drafted players who played today and their HR/HBP stats. Load after games start for best results."));
 
   if(!S.utbDone && !S.utbLoading) {
     wrap.appendChild(h("button",{style:{padding:"12px 28px",borderRadius:"8px",cursor:"pointer",background:C.accent,border:"none",color:"#000",fontWeight:"700",fontSize:"14px"},onClick:loadUpToBat},"Load Today's Schedule"));
@@ -591,31 +591,24 @@ function buildUpToBat() {
       const card = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",overflow:"hidden",marginBottom:"4px"}});
       players.forEach((p,i) => {
         const row = h("div",{style:{padding:"14px 18px",borderBottom:i<players.length-1?`1px solid ${C.border}33`:"none"}});
-        // Top line: name + matchup
-        const top = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"6px"}});
+        const top = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}});
         const nameEl = h("div",{});
         const nameSpan = h("span",{style:{color:C.text,fontWeight:"700",fontSize:"15px"}},p.name);
         if(p.teamAbbr) nameSpan.appendChild(h("span",{style:{color:C.muted,fontWeight:"400",fontSize:"13px"}},` (${p.teamAbbr})`));
         nameEl.appendChild(nameSpan);
-        const typeTag = h("span",{style:{fontSize:"10px",fontWeight:"700",padding:"2px 6px",borderRadius:"4px",marginLeft:"8px",background:p.type==="hr"?C.red+"33":C.green+"33",color:p.type==="hr"?C.red:C.green}},p.type==="hr"?"HR":"HBP");
-        nameEl.appendChild(typeTag);
-        top.appendChild(nameEl);
-        // Game time
-        top.appendChild(h("span",{style:{color:C.muted,fontSize:"12px",whiteSpace:"nowrap",marginLeft:"8px"}},p.gameTime));
-        row.appendChild(top);
-        // Matchup line
-        const matchup = h("div",{style:{display:"flex",gap:"12px",alignItems:"center",flexWrap:"wrap"}});
-        matchup.appendChild(h("span",{style:{color:C.muted,fontSize:"12px"}},
+        const typeColor = p.type==="hr"?C.red:C.green;
+        const statVal = p.type==="hr" ? p.todayHR : p.todayHBP;
+        const statLabel = p.type==="hr" ? "HR" : "HBP";
+        nameEl.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginTop:"3px"}},
           `${p.homeAway==="home"?"🏠 vs":"✈️ @"} ${p.opponent}`
         ));
-        // Probable pitcher
-        if(p.probablePitcher) {
-          const era = p.era !== null ? ` · ${p.era} ERA` : "";
-          matchup.appendChild(h("span",{style:{color:C.muted,fontSize:"12px"}},`· 🎯 ${p.probablePitcher}${era}`));
-        } else {
-          matchup.appendChild(h("span",{style:{color:C.muted,fontSize:"12px"}},"· 🎯 Pitcher TBD"));
-        }
-        row.appendChild(matchup);
+        top.appendChild(nameEl);
+        // Today's stat
+        const statEl = h("div",{style:{textAlign:"right"}});
+        statEl.appendChild(h("span",{style:{color:statVal>0?typeColor:C.muted,fontFamily:"'Bebas Neue', sans-serif",fontSize:"26px",fontWeight:"800"}},statVal));
+        statEl.appendChild(h("div",{style:{color:C.muted,fontSize:"10px",textTransform:"uppercase"}},statLabel+" today"));
+        top.appendChild(statEl);
+        row.appendChild(top);
         card.appendChild(row);
       });
       wrap.appendChild(card);
@@ -626,91 +619,46 @@ function buildUpToBat() {
 }
 
 async function loadUpToBat() {
-  set({utbLoading:true,utbDone:false,utbResults:null});
+  set({utbLoading:true,utbDone:false,utbResults:null,utbApiAbbrs:[]});
+  const today = new Date().toISOString().split("T")[0];
+  const season = new Date().getFullYear();
+  const results = [];
   try {
-    // Build lookup of teamAbbr → drafted players using HARDCODED_TEAMS as source of truth for abbrs
-    const draftedTeams = {};
-    S.teams.forEach(ft => {
-      const hcTeam = HARDCODED_TEAMS.find(h => h.id === ft.id);
-      (ft.players||[]).forEach((p, i) => {
-        if(p.droppedAt || !p.name?.trim()) return;
-        // Use hardcoded abbr as fallback if Firebase hasn't populated it yet
+    for(const ft of S.teams) {
+      const hcTeam = HARDCODED_TEAMS.find(hc => hc.id === ft.id);
+      for(let i=0; i<(ft.players||[]).length; i++) {
+        const p = ft.players[i];
+        if(p.droppedAt || !p.name?.trim()) continue;
         const abbr = p.teamAbbr || hcTeam?.players?.[i]?.teamAbbr || null;
-        if(!abbr) return;
-        if(!draftedTeams[abbr]) draftedTeams[abbr] = [];
-        draftedTeams[abbr].push({...p, teamAbbr: abbr, fantasyTeam: ft.name});
-      });
-    });
-
-    // Fetch today's schedule with probable pitchers
-    const today = new Date().toISOString().split("T")[0];
-    const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=probablePitcher`);
-    if(!schedRes.ok) throw new Error(`Schedule API returned ${schedRes.status}`);
-    const schedData = await schedRes.json();
-    const games = schedData.dates?.[0]?.games || [];
-    console.log("UTB: games found:", games.length);
-    console.log("UTB: draftedTeams keys:", Object.keys(draftedTeams));
-    games.forEach(g => console.log("UTB: game abbrs:", g.teams?.away?.team?.abbreviation, "@", g.teams?.home?.team?.abbreviation));
-
-    const results = [];
-    for(const game of games) {
-      const awayAbbr = game.teams?.away?.team?.abbreviation;
-      const homeAbbr = game.teams?.home?.team?.abbreviation;
-      const rawTime = game.gameDate ? new Date(game.gameDate).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",timeZoneName:"short"}) : "TBD";
-      const awayPitcher = game.teams?.away?.probablePitcher;
-      const homePitcher = game.teams?.home?.probablePitcher;
-
-      const pitcherName = (p) => p?.fullName || null;
-      const pitcherEra = (p) => p?.era ?? null;
-
-      if(draftedTeams[awayAbbr]) {
-        for(const p of draftedTeams[awayAbbr]) {
+        const playerId = PLAYER_IDS[p.name];
+        if(!playerId) continue;
+        try {
+          // Use gameLog for today to see if they have/had a game
+          const r = await fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=gameLog&group=hitting&season=${season}&startDate=${today}&endDate=${today}&sportId=1`);
+          if(!r.ok) continue;
+          const d = await r.json();
+          const split = d.stats?.[0]?.splits?.[0];
+          if(!split) continue; // No game today
+          const opp = split.opponent?.abbreviation || "?";
+          const isHome = split.isHome ?? false;
+          const hrs = split.stat?.homeRuns ?? 0;
+          const hbps = split.stat?.hitByPitch ?? 0;
           results.push({
-            name: p.name, teamAbbr: p.teamAbbr, type: p.type,
-            fantasyTeam: p.fantasyTeam, homeAway: "away",
-            opponent: homeAbbr, gameTime: rawTime,
-            probablePitcher: pitcherName(homePitcher),
-            era: pitcherEra(homePitcher),
+            name: p.name, teamAbbr: abbr, type: p.type,
+            fantasyTeam: ft.name,
+            homeAway: isHome ? "home" : "away",
+            opponent: opp,
+            gameTime: "Today",
+            probablePitcher: null, era: null,
+            todayHR: hrs, todayHBP: hbps,
           });
-        }
-      }
-      if(draftedTeams[homeAbbr]) {
-        for(const p of draftedTeams[homeAbbr]) {
-          results.push({
-            name: p.name, teamAbbr: p.teamAbbr, type: p.type,
-            fantasyTeam: p.fantasyTeam, homeAway: "home",
-            opponent: awayAbbr, gameTime: rawTime,
-            probablePitcher: pitcherName(awayPitcher),
-            era: pitcherEra(awayPitcher),
-          });
-        }
+        } catch(e) { continue; }
       }
     }
-
-    results.sort((a,b) => a.gameTime.localeCompare(b.gameTime));
-
-    // Fetch ERA for each unique probable pitcher
-    const pitcherIds = {};
-    games.forEach(game => {
-      const ap = game.teams?.away?.probablePitcher;
-      const hp = game.teams?.home?.probablePitcher;
-      if(ap?.id && ap?.fullName) pitcherIds[ap.fullName] = ap.id;
-      if(hp?.id && hp?.fullName) pitcherIds[hp.fullName] = hp.id;
-    });
-    const season = new Date().getFullYear();
-    for(const [name, id] of Object.entries(pitcherIds)) {
-      try {
-        const er = await fetch(`https://statsapi.mlb.com/api/v1/people/${id}/stats?stats=season&group=pitching&season=${season}&sportId=1`);
-        const ed = await er.json();
-        const era = ed.stats?.[0]?.splits?.[0]?.stat?.era ?? null;
-        results.forEach(r => { if(r.probablePitcher === name) r.era = era; });
-      } catch(e) { /* skip ERA if fetch fails */ }
-    }
-
-    const apiAbbrs = games.map(g => `${g.teams?.away?.team?.abbreviation} @ ${g.teams?.home?.team?.abbreviation}`);
-    set({utbLoading:false, utbDone:true, utbResults:results, utbApiAbbrs:apiAbbrs});
+    set({utbLoading:false, utbDone:true, utbResults:results});
   } catch(e) {
-    set({utbLoading:false, utbDone:true, utbResults:[], utbApiAbbrs:[`ERROR: ${e.message}`]});
+    console.error("UTB error:", e);
+    set({utbLoading:false, utbDone:true, utbResults:[]});
   }
 }
 
