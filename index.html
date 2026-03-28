@@ -630,7 +630,7 @@ function buildUpToBat() {
 async function loadUpToBat() {
   set({utbLoading:true,utbDone:false,utbResults:null});
   try {
-    // Build a set of all drafted teamAbbrs
+    // Build lookup of teamAbbr → drafted players
     const draftedTeams = {};
     S.teams.forEach(ft => {
       (ft.players||[]).forEach(p => {
@@ -641,59 +641,47 @@ async function loadUpToBat() {
       });
     });
 
-    // Fetch today's schedule
+    // Fetch today's schedule with probable pitchers
     const today = new Date().toISOString().split("T")[0];
     const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=probablePitcher(stats)`);
     const schedData = await schedRes.json();
     const games = schedData.dates?.[0]?.games || [];
 
     const results = [];
-    games.forEach(game => {
+    for(const game of games) {
       const awayAbbr = game.teams?.away?.team?.abbreviation;
       const homeAbbr = game.teams?.home?.team?.abbreviation;
-      const gameTime = game.gameDate ? new Date(game.gameDate).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",timeZoneName:"short"}) : "TBD";
-
-      // Get probable pitchers
+      const rawTime = game.gameDate ? new Date(game.gameDate).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",timeZoneName:"short"}) : "TBD";
       const awayPitcher = game.teams?.away?.probablePitcher;
       const homePitcher = game.teams?.home?.probablePitcher;
 
-      const getPitcherInfo = async (pitcherObj) => {
-        if(!pitcherObj) return {name:null, era:null};
-        const name = pitcherObj.fullName || null;
-        // ERA from stats if available
-        const era = pitcherObj.stats?.[0]?.splits?.[0]?.stat?.era ?? null;
-        return {name, era};
-      };
+      const pitcherName = (p) => p?.fullName || null;
+      const pitcherEra = (p) => p?.stats?.[0]?.splits?.[0]?.stat?.era ?? null;
 
-      // Check away team players
       if(draftedTeams[awayAbbr]) {
-        draftedTeams[awayAbbr].forEach(p => {
-          const pitcher = homePitcher;
+        for(const p of draftedTeams[awayAbbr]) {
           results.push({
             name: p.name, teamAbbr: p.teamAbbr, type: p.type,
             fantasyTeam: p.fantasyTeam, homeAway: "away",
-            opponent: homeAbbr, gameTime,
-            probablePitcher: pitcher?.fullName || null,
-            era: pitcher?.stats?.[0]?.splits?.[0]?.stat?.era ?? null,
+            opponent: homeAbbr, gameTime: rawTime,
+            probablePitcher: pitcherName(homePitcher),
+            era: pitcherEra(homePitcher),
           });
-        });
+        }
       }
-      // Check home team players
       if(draftedTeams[homeAbbr]) {
-        draftedTeams[homeAbbr].forEach(p => {
-          const pitcher = awayPitcher;
+        for(const p of draftedTeams[homeAbbr]) {
           results.push({
             name: p.name, teamAbbr: p.teamAbbr, type: p.type,
             fantasyTeam: p.fantasyTeam, homeAway: "home",
-            opponent: awayAbbr, gameTime,
-            probablePitcher: pitcher?.fullName || null,
-            era: pitcher?.stats?.[0]?.splits?.[0]?.stat?.era ?? null,
+            opponent: awayAbbr, gameTime: rawTime,
+            probablePitcher: pitcherName(awayPitcher),
+            era: pitcherEra(awayPitcher),
           });
-        });
+        }
       }
-    });
+    }
 
-    // Sort by game time, then fantasy team
     results.sort((a,b) => a.gameTime.localeCompare(b.gameTime));
     set({utbLoading:false, utbDone:true, utbResults:results});
   } catch(e) {
