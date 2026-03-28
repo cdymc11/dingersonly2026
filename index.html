@@ -266,6 +266,8 @@ let S = {
   cpActive: 0, cpLocal: null, cpRefreshing: false, cpStatus: "", cpReplHR: "", cpReplHBP: "",
   // yesterday
   ydResults: null, ydLoading: false, ydDone: false,
+  // up to bat
+  utbResults: null, utbLoading: false, utbDone: false,
   // debug
   dbResults: [], dbRunning: false, dbDone: false,
 };
@@ -554,6 +556,149 @@ async function loadYesterday() {
   }
   hits.sort((a,b)=>b.stat-a.stat);
   set({ydLoading:false,ydDone:true,ydResults:hits});
+}
+
+}
+
+// ── Up to Bat ─────────────────────────────────────────────────────────────────
+function buildUpToBat() {
+  const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
+  wrap.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"6px"}},
+    h("span",{style:{fontSize:"20px"}},"⚾"),
+    h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Up to Bat — Today's Schedule")
+  ));
+  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"13px",marginBottom:"20px"}},"See which drafted players have games today, their opponent, and probable pitchers."));
+
+  if(!S.utbDone && !S.utbLoading) {
+    wrap.appendChild(h("button",{style:{padding:"12px 28px",borderRadius:"8px",cursor:"pointer",background:C.accent,border:"none",color:"#000",fontWeight:"700",fontSize:"14px"},onClick:loadUpToBat},"Load Today's Schedule"));
+    return wrap;
+  }
+  if(S.utbLoading) { wrap.appendChild(spinner("Loading today's schedule…")); return wrap; }
+
+  if(!S.utbResults || S.utbResults.length === 0) {
+    wrap.appendChild(h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",padding:"28px",textAlign:"center"}},
+      h("div",{style:{fontSize:"32px",marginBottom:"8px"}},"😴"),
+      h("div",{style:{color:C.text,fontSize:"16px",fontWeight:"700",marginBottom:"8px"}},"No Games Today"),
+      h("div",{style:{color:C.muted,fontSize:"13px"}},"None of your drafted players have games scheduled today.")
+    ));
+  } else {
+    // Group by fantasy team
+    const byTeam = {};
+    S.utbResults.forEach(r => {
+      if(!byTeam[r.fantasyTeam]) byTeam[r.fantasyTeam] = [];
+      byTeam[r.fantasyTeam].push(r);
+    });
+    Object.entries(byTeam).forEach(([fantasyTeam, players]) => {
+      wrap.appendChild(h("div",{style:{color:C.accent,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"8px",marginTop:"20px"}},fantasyTeam));
+      const card = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",overflow:"hidden",marginBottom:"4px"}});
+      players.forEach((p,i) => {
+        const row = h("div",{style:{padding:"14px 18px",borderBottom:i<players.length-1?`1px solid ${C.border}33`:"none"}});
+        // Top line: name + matchup
+        const top = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"6px"}});
+        const nameEl = h("div",{});
+        const nameSpan = h("span",{style:{color:C.text,fontWeight:"700",fontSize:"15px"}},p.name);
+        if(p.teamAbbr) nameSpan.appendChild(h("span",{style:{color:C.muted,fontWeight:"400",fontSize:"13px"}},` (${p.teamAbbr})`));
+        nameEl.appendChild(nameSpan);
+        const typeTag = h("span",{style:{fontSize:"10px",fontWeight:"700",padding:"2px 6px",borderRadius:"4px",marginLeft:"8px",background:p.type==="hr"?C.red+"33":C.green+"33",color:p.type==="hr"?C.red:C.green}},p.type==="hr"?"HR":"HBP");
+        nameEl.appendChild(typeTag);
+        top.appendChild(nameEl);
+        // Game time
+        top.appendChild(h("span",{style:{color:C.muted,fontSize:"12px",whiteSpace:"nowrap",marginLeft:"8px"}},p.gameTime));
+        row.appendChild(top);
+        // Matchup line
+        const matchup = h("div",{style:{display:"flex",gap:"12px",alignItems:"center",flexWrap:"wrap"}});
+        matchup.appendChild(h("span",{style:{color:C.muted,fontSize:"12px"}},
+          `${p.homeAway==="home"?"🏠 vs":"✈️ @"} ${p.opponent}`
+        ));
+        // Probable pitcher
+        if(p.probablePitcher) {
+          const era = p.era !== null ? ` · ${p.era} ERA` : "";
+          matchup.appendChild(h("span",{style:{color:C.muted,fontSize:"12px"}},`· 🎯 ${p.probablePitcher}${era}`));
+        } else {
+          matchup.appendChild(h("span",{style:{color:C.muted,fontSize:"12px"}},"· 🎯 Pitcher TBD"));
+        }
+        row.appendChild(matchup);
+        card.appendChild(row);
+      });
+      wrap.appendChild(card);
+    });
+  }
+  wrap.appendChild(h("button",{style:{width:"100%",marginTop:"16px",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"13px"},onClick:loadUpToBat},"⟳ Refresh"));
+  return wrap;
+}
+
+async function loadUpToBat() {
+  set({utbLoading:true,utbDone:false,utbResults:null});
+  try {
+    // Build a set of all drafted teamAbbrs
+    const draftedTeams = {};
+    S.teams.forEach(ft => {
+      (ft.players||[]).forEach(p => {
+        if(p.teamAbbr && p.name?.trim() && !p.droppedAt) {
+          if(!draftedTeams[p.teamAbbr]) draftedTeams[p.teamAbbr] = [];
+          draftedTeams[p.teamAbbr].push({...p, fantasyTeam: ft.name});
+        }
+      });
+    });
+
+    // Fetch today's schedule
+    const today = new Date().toISOString().split("T")[0];
+    const schedRes = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=probablePitcher(stats)`);
+    const schedData = await schedRes.json();
+    const games = schedData.dates?.[0]?.games || [];
+
+    const results = [];
+    games.forEach(game => {
+      const awayAbbr = game.teams?.away?.team?.abbreviation;
+      const homeAbbr = game.teams?.home?.team?.abbreviation;
+      const gameTime = game.gameDate ? new Date(game.gameDate).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",timeZoneName:"short"}) : "TBD";
+
+      // Get probable pitchers
+      const awayPitcher = game.teams?.away?.probablePitcher;
+      const homePitcher = game.teams?.home?.probablePitcher;
+
+      const getPitcherInfo = async (pitcherObj) => {
+        if(!pitcherObj) return {name:null, era:null};
+        const name = pitcherObj.fullName || null;
+        // ERA from stats if available
+        const era = pitcherObj.stats?.[0]?.splits?.[0]?.stat?.era ?? null;
+        return {name, era};
+      };
+
+      // Check away team players
+      if(draftedTeams[awayAbbr]) {
+        draftedTeams[awayAbbr].forEach(p => {
+          const pitcher = homePitcher;
+          results.push({
+            name: p.name, teamAbbr: p.teamAbbr, type: p.type,
+            fantasyTeam: p.fantasyTeam, homeAway: "away",
+            opponent: homeAbbr, gameTime,
+            probablePitcher: pitcher?.fullName || null,
+            era: pitcher?.stats?.[0]?.splits?.[0]?.stat?.era ?? null,
+          });
+        });
+      }
+      // Check home team players
+      if(draftedTeams[homeAbbr]) {
+        draftedTeams[homeAbbr].forEach(p => {
+          const pitcher = awayPitcher;
+          results.push({
+            name: p.name, teamAbbr: p.teamAbbr, type: p.type,
+            fantasyTeam: p.fantasyTeam, homeAway: "home",
+            opponent: awayAbbr, gameTime,
+            probablePitcher: pitcher?.fullName || null,
+            era: pitcher?.stats?.[0]?.splits?.[0]?.stat?.era ?? null,
+          });
+        });
+      }
+    });
+
+    // Sort by game time, then fantasy team
+    results.sort((a,b) => a.gameTime.localeCompare(b.gameTime));
+    set({utbLoading:false, utbDone:true, utbResults:results});
+  } catch(e) {
+    set({utbLoading:false, utbDone:true, utbResults:[]});
+  }
 }
 
 // ── Debug ─────────────────────────────────────────────────────────────────────
@@ -884,7 +1029,7 @@ function render() {
   app.appendChild(header);
 
   // Tabs
-  const tabs=[{id:"standings",label:"🏆 Standings"},{id:"rosters",label:"📋 Rosters"},{id:"leaderboard",label:"📊 Leaderboard"},{id:"yesterday",label:"📅 Yesterday"},{id:"debug",label:"🔍 Debug"}];
+  const tabs=[{id:"standings",label:"🏆 Standings"},{id:"rosters",label:"📋 Rosters"},{id:"leaderboard",label:"📊 Leaderboard"},{id:"uptodat",label:"⚾ Up to Bat"},{id:"yesterday",label:"📅 Yesterday"},{id:"debug",label:"🔍 Debug"}];
   const tabBar=h("div",{style:{borderBottom:`1px solid ${C.border}`,background:C.surface}});
   const tabInner=h("div",{style:{maxWidth:"640px",margin:"0 auto",display:"flex",padding:"0 16px",overflowX:"auto"}});
   tabs.forEach(tab=>{
@@ -899,6 +1044,7 @@ function render() {
   if(S.tab==="standings") body.appendChild(buildStandings());
   else if(S.tab==="rosters") body.appendChild(buildRosters());
   else if(S.tab==="leaderboard") body.appendChild(buildLeaderboard());
+  else if(S.tab==="uptodat") body.appendChild(buildUpToBat());
   else if(S.tab==="yesterday") body.appendChild(buildYesterday());
   else if(S.tab==="debug") body.appendChild(buildDebug());
   app.appendChild(body);
