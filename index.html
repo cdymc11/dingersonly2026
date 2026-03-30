@@ -938,16 +938,38 @@ async function loadScores() {
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     const games = d.dates?.[0]?.games || [];
-    const results = games.map(g => ({
-      awayAbbr: g.teams?.away?.team?.abbreviation || g.teams?.away?.team?.teamCode?.toUpperCase() || "?",
-      awayName: g.teams?.away?.team?.teamName || g.teams?.away?.team?.name || "",
-      awayScore: g.teams?.away?.score ?? "-",
-      homeAbbr: g.teams?.home?.team?.abbreviation || g.teams?.home?.team?.teamCode?.toUpperCase() || "?",
-      homeName: g.teams?.home?.team?.teamName || g.teams?.home?.team?.name || "",
-      homeScore: g.teams?.home?.score ?? "-",
-      status: g.status?.detailedState || g.status?.abstractGameState || "Scheduled",
-      gameTime: g.gameDate ? new Date(g.gameDate).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) : null,
-    }));
+
+    // Hardcoded MLB team ID → abbreviation (these never change)
+    const TEAM_ABBR = {
+      108:"LAA",109:"ARI",110:"BAL",111:"BOS",112:"CHC",113:"CIN",114:"CLE",
+      115:"COL",116:"DET",117:"HOU",118:"KC",119:"LAD",120:"WSH",121:"NYM",
+      133:"ATH",134:"PIT",135:"SD",136:"SEA",137:"SF",138:"STL",139:"TB",
+      140:"TEX",141:"TOR",142:"MIN",143:"PHI",144:"ATL",145:"CWS",146:"MIA",
+      147:"NYY",158:"MIL"
+    };
+    const TEAM_NAME = {
+      108:"Angels",109:"D-backs",110:"Orioles",111:"Red Sox",112:"Cubs",
+      113:"Reds",114:"Guardians",115:"Rockies",116:"Tigers",117:"Astros",
+      118:"Royals",119:"Dodgers",120:"Nationals",121:"Mets",133:"Athletics",
+      134:"Pirates",135:"Padres",136:"Mariners",137:"Giants",138:"Cardinals",
+      139:"Rays",140:"Rangers",141:"Blue Jays",142:"Twins",143:"Phillies",
+      144:"Braves",145:"White Sox",146:"Marlins",147:"Yankees",158:"Brewers"
+    };
+
+    const results = games.map(g => {
+      const awayId = g.teams?.away?.team?.id;
+      const homeId = g.teams?.home?.team?.id;
+      return {
+        awayAbbr: TEAM_ABBR[awayId] || g.teams?.away?.team?.abbreviation || "?",
+        awayName: TEAM_NAME[awayId] || g.teams?.away?.team?.teamName || "",
+        awayScore: g.teams?.away?.score ?? "-",
+        homeAbbr: TEAM_ABBR[homeId] || g.teams?.home?.team?.abbreviation || "?",
+        homeName: TEAM_NAME[homeId] || g.teams?.home?.team?.teamName || "",
+        homeScore: g.teams?.home?.score ?? "-",
+        status: g.status?.detailedState || g.status?.abstractGameState || "Scheduled",
+        gameTime: g.gameDate ? new Date(g.gameDate).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) : null,
+      };
+    });
     set({scLoading:false,scDone:true,scResults:results});
   } catch(e) {
     set({scLoading:false,scDone:true,scResults:[]});
