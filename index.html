@@ -270,6 +270,8 @@ let S = {
   ydResults: null, ydLoading: false, ydDone: false,
   // weekly recap
   wkResults: null, wkLoading: false, wkDone: false,
+  // scores
+  scResults: null, scLoading: false, scDone: false,
   // up to bat
   utbResults: null, utbLoading: false, utbDone: false, utbApiAbbrs: [],
   // debug
@@ -808,6 +810,148 @@ function buildProjected() {
     "Steamer 2026 preseason projections · Refresh Stats for latest actuals"
   ));
   return wrap;
+}
+
+// ── Scores ────────────────────────────────────────────────────────────────────
+function buildScores() {
+  const today = new Date();
+  const dateLabel = today.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+
+  // Build set of all drafted teamAbbrs
+  const draftedAbbrs = new Set();
+  S.teams.forEach(ft => {
+    const hcTeam = HARDCODED_TEAMS.find(h => h.id === ft.id);
+    (ft.players||[]).forEach((p,i) => {
+      const abbr = p.teamAbbr || hcTeam?.players?.[i]?.teamAbbr || null;
+      if(abbr) draftedAbbrs.add(abbr);
+    });
+  });
+
+  const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
+  wrap.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px"}},
+    h("span",{style:{fontSize:"20px"}},"⚾"),
+    h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Today's Scores")
+  ));
+  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"4px"}},dateLabel));
+  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",marginBottom:"20px"}},"🌟 = has drafted players · When games show Final, refresh your stats!"));
+
+  if(!S.scDone && !S.scLoading) {
+    wrap.appendChild(h("button",{style:{padding:"12px 28px",borderRadius:"8px",cursor:"pointer",background:C.accent,border:"none",color:"#000",fontWeight:"700",fontSize:"14px"},onClick:loadScores},"Load Today's Scores"));
+    return wrap;
+  }
+  if(S.scLoading) { wrap.appendChild(spinner("Loading scores…")); return wrap; }
+  if(!S.scResults || S.scResults.length === 0) {
+    wrap.appendChild(h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",padding:"28px",textAlign:"center"}},
+      h("div",{style:{fontSize:"32px",marginBottom:"8px"}},"😴"),
+      h("div",{style:{color:C.text,fontSize:"16px",fontWeight:"700"}},"No Games Today")
+    ));
+  } else {
+    const list = h("div",{style:{display:"flex",flexDirection:"column",gap:"8px"}});
+    S.scResults.forEach(game => {
+      const hasDrafted = draftedAbbrs.has(game.awayAbbr) || draftedAbbrs.has(game.homeAbbr);
+      const isFinal = game.status === "Final" || game.status === "Game Over";
+      const isLive = game.status === "In Progress" || game.status?.includes("Inn");
+      const statusColor = isFinal ? C.muted : isLive ? C.green : C.muted;
+      const card = h("div",{style:{
+        background: C.card,
+        border: `1px solid ${hasDrafted ? C.accent+"55" : C.border}`,
+        borderRadius:"10px",
+        padding:"12px 16px",
+        boxShadow: hasDrafted ? `0 0 12px ${C.accent}15` : "none"
+      }});
+
+      const top = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}});
+      // Star + status
+      const statusEl = h("div",{style:{display:"flex",alignItems:"center",gap:"6px"}});
+      if(hasDrafted) statusEl.appendChild(h("span",{style:{fontSize:"14px"}},"🌟"));
+      statusEl.appendChild(h("span",{style:{color:statusColor,fontSize:"11px",fontWeight:"700",textTransform:"uppercase"}},
+        isLive ? `🔴 ${game.status}` : game.status
+      ));
+      top.appendChild(statusEl);
+      // Game time if not started
+      if(!isFinal && !isLive && game.gameTime) {
+        top.appendChild(h("span",{style:{color:C.muted,fontSize:"11px"}},game.gameTime));
+      }
+      card.appendChild(top);
+
+      // Teams + scores
+      const matchup = h("div",{style:{display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",gap:"8px"}});
+
+      // Away team
+      const awayHasDrafted = draftedAbbrs.has(game.awayAbbr);
+      const awayEl = h("div",{style:{textAlign:"left"}});
+      awayEl.appendChild(h("div",{style:{color:awayHasDrafted?C.accent:C.text,fontWeight:awayHasDrafted?"800":"600",fontSize:"16px"}},game.awayAbbr));
+      awayEl.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",marginTop:"2px"}},game.awayName));
+      matchup.appendChild(awayEl);
+
+      // Score or vs
+      const scoreEl = h("div",{style:{textAlign:"center"}});
+      if(isFinal || isLive) {
+        scoreEl.appendChild(h("div",{style:{color:C.text,fontFamily:"'Bebas Neue', sans-serif",fontSize:"24px",fontWeight:"800",lineHeight:"1"}},
+          `${game.awayScore} - ${game.homeScore}`
+        ));
+      } else {
+        scoreEl.appendChild(h("div",{style:{color:C.muted,fontSize:"16px",fontWeight:"700"}},"vs"));
+      }
+      matchup.appendChild(scoreEl);
+
+      // Home team
+      const homeHasDrafted = draftedAbbrs.has(game.homeAbbr);
+      const homeEl = h("div",{style:{textAlign:"right"}});
+      homeEl.appendChild(h("div",{style:{color:homeHasDrafted?C.accent:C.text,fontWeight:homeHasDrafted?"800":"600",fontSize:"16px"}},game.homeAbbr));
+      homeEl.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",marginTop:"2px"}},game.homeName));
+      matchup.appendChild(homeEl);
+      card.appendChild(matchup);
+
+      // Show which drafted players are in this game
+      if(hasDrafted) {
+        const draftedInGame = [];
+        S.teams.forEach(ft => {
+          const hcTeam = HARDCODED_TEAMS.find(hc => hc.id === ft.id);
+          (ft.players||[]).forEach((p,i) => {
+            const abbr = p.teamAbbr || hcTeam?.players?.[i]?.teamAbbr || null;
+            if(abbr === game.awayAbbr || abbr === game.homeAbbr) {
+              draftedInGame.push(`${p.name} (${ft.name})`);
+            }
+          });
+        });
+        if(draftedInGame.length > 0) {
+          card.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",marginTop:"8px",paddingTop:"8px",borderTop:`1px solid ${C.border}33`}},
+            draftedInGame.join(" · ")
+          ));
+        }
+      }
+      list.appendChild(card);
+    });
+    wrap.appendChild(list);
+  }
+
+  wrap.appendChild(h("button",{style:{width:"100%",marginTop:"16px",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"13px"},onClick:loadScores},"⟳ Refresh Scores"));
+  return wrap;
+}
+
+async function loadScores() {
+  set({scLoading:true,scDone:false,scResults:null});
+  try {
+    const today = new Date().toISOString().split("T")[0];
+    const r = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}`);
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    const games = d.dates?.[0]?.games || [];
+    const results = games.map(g => ({
+      awayAbbr: g.teams?.away?.team?.abbreviation || "?",
+      awayName: g.teams?.away?.team?.teamName || "",
+      awayScore: g.teams?.away?.score ?? "-",
+      homeAbbr: g.teams?.home?.team?.abbreviation || "?",
+      homeName: g.teams?.home?.team?.teamName || "",
+      homeScore: g.teams?.home?.score ?? "-",
+      status: g.status?.detailedState || g.status?.abstractGameState || "Preview",
+      gameTime: g.gameDate ? new Date(g.gameDate).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) : null,
+    }));
+    set({scLoading:false,scDone:true,scResults:results});
+  } catch(e) {
+    set({scLoading:false,scDone:true,scResults:[]});
+  }
 }
 
 // ── Weekly Recap ──────────────────────────────────────────────────────────────
@@ -1455,7 +1599,7 @@ function render() {
   app.appendChild(header);
 
   // Tabs
-  const tabs=[{id:"standings",label:"🏆 Standings"},{id:"rosters",label:"📋 Rosters"},{id:"leaderboard",label:"📊 Leaderboard"},{id:"projected",label:"🔮 Projected"},{id:"weekly",label:"📰 Weekly Recap"},{id:"yesterday",label:"📅 Yesterday"},{id:"debug",label:"🔍 Debug"}];
+  const tabs=[{id:"standings",label:"🏆 Standings"},{id:"rosters",label:"📋 Rosters"},{id:"leaderboard",label:"📊 Leaderboard"},{id:"projected",label:"🔮 Projected"},{id:"scores",label:"⚾ Scores"},{id:"weekly",label:"📰 Weekly Recap"},{id:"yesterday",label:"📅 Yesterday"},{id:"debug",label:"🔍 Debug"}];
   const tabBar=h("div",{style:{borderBottom:`1px solid ${C.border}`,background:C.surface}});
   const tabInner=h("div",{style:{maxWidth:"640px",margin:"0 auto",display:"flex",padding:"0 16px",overflowX:"auto"}});
   tabs.forEach(tab=>{
@@ -1471,6 +1615,7 @@ function render() {
   else if(S.tab==="rosters") body.appendChild(buildRosters());
   else if(S.tab==="leaderboard") body.appendChild(buildLeaderboard());
   else if(S.tab==="projected") body.appendChild(buildProjected());
+  else if(S.tab==="scores") body.appendChild(buildScores());
   else if(S.tab==="weekly") body.appendChild(buildWeeklyRecap());
   else if(S.tab==="yesterday") body.appendChild(buildYesterday());
   else if(S.tab==="debug") body.appendChild(buildDebug());
