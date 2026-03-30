@@ -849,8 +849,8 @@ function buildScores() {
     const list = h("div",{style:{display:"flex",flexDirection:"column",gap:"8px"}});
     S.scResults.forEach(game => {
       const hasDrafted = draftedAbbrs.has(game.awayAbbr) || draftedAbbrs.has(game.homeAbbr);
-      const isFinal = game.status === "Final" || game.status === "Game Over";
-      const isLive = game.status === "In Progress" || game.status?.includes("Inn");
+      const isFinal = ["Final","Game Over","Completed Early","Completed"].some(s => game.status?.includes(s));
+      const isLive = ["In Progress","Warmup","Pre-Game"].some(s => game.status?.includes(s)) || game.status === "Live";
       const statusColor = isFinal ? C.muted : isLive ? C.green : C.muted;
       const card = h("div",{style:{
         background: C.card,
@@ -934,10 +934,11 @@ async function loadScores() {
   set({scLoading:true,scDone:false,scResults:null});
   try {
     const today = new Date().toISOString().split("T")[0];
-    const r = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=linescore`);
+    const r = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=linescore,team`);
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     const games = d.dates?.[0]?.games || [];
+    console.log("Scores API sample game:", JSON.stringify(games[0], null, 2).slice(0, 800));
 
     // Hardcoded MLB team ID → abbreviation (these never change)
     const TEAM_ABBR = {
