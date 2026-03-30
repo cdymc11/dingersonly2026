@@ -833,7 +833,7 @@ function buildScores() {
     h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Today's Scores")
   ));
   wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"4px"}},dateLabel));
-  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",marginBottom:"20px"}},"🌟 = has drafted players · When games show Final, refresh your stats!"));
+  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",marginBottom:"20px"}},"🌟 = has drafted players · When games show Final, wait 1-2 hours then refresh stats!"));
 
   if(!S.scDone && !S.scLoading) {
     wrap.appendChild(h("button",{style:{padding:"12px 28px",borderRadius:"8px",cursor:"pointer",background:C.accent,border:"none",color:"#000",fontWeight:"700",fontSize:"14px"},onClick:loadScores},"Load Today's Scores"));
@@ -867,6 +867,7 @@ function buildScores() {
       statusEl.appendChild(h("span",{style:{color:statusColor,fontSize:"11px",fontWeight:"700",textTransform:"uppercase"}},
         isLive ? `🔴 ${game.inning || game.status}` : game.status
       ));
+      if(isFinal) statusEl.appendChild(h("span",{style:{color:C.muted,fontSize:"10px",marginLeft:"6px"}},"· refresh stats in 1-2 hrs"));
       top.appendChild(statusEl);
       // Game time if not started
       if(!isFinal && !isLive && game.gameTime) {
@@ -1112,6 +1113,79 @@ async function loadWeeklyRecap(startDate, endDate) {
   } catch(e) {
     set({wkLoading:false,wkDone:true,wkResults:null});
   }
+}
+
+// ── Rules ─────────────────────────────────────────────────────────────────────
+function buildRules() {
+  // All-Star Game: July 14, 2026 @ 8:00 PM ET = midnight UTC July 15
+  const allStarDate = new Date("2026-07-14T20:00:00-04:00");
+  const now = new Date();
+  const diff = allStarDate - now;
+  const days = Math.floor(diff / (1000*60*60*24));
+  const hours = Math.floor((diff % (1000*60*60*24)) / (1000*60*60));
+  const mins = Math.floor((diff % (1000*60*60)) / (1000*60));
+  const secs = Math.floor((diff % (1000*60)) / 1000);
+  const countdown = diff > 0
+    ? `${days}d ${hours}h ${mins}m ${secs}s`
+    : "🎉 The All-Star Game is here!";
+
+  const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
+  wrap.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"20px"}},
+    h("span",{style:{fontSize:"20px"}},"📖"),
+    h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"League Rules · Dingers Only 2026")
+  ));
+
+  // All-Star countdown card
+  const asg = h("div",{style:{background:`linear-gradient(135deg,${C.accent}22,${C.red}11)`,border:`1px solid ${C.accent}55`,borderRadius:"14px",padding:"20px",marginBottom:"20px",textAlign:"center"}});
+  asg.appendChild(h("div",{style:{color:C.accent,fontSize:"12px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:"6px"}},"⏳ Trade Deadline · All-Star Game"));
+  asg.appendChild(h("div",{style:{color:C.text,fontSize:"15px",fontWeight:"700",marginBottom:"4px"}},"July 14, 2026 · Citizens Bank Park, Philadelphia"));
+  asg.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"14px"}},"First Pitch 8:00 PM ET · No roster moves after first pitch"));
+  asg.appendChild(h("div",{style:{color:C.accent,fontFamily:"'Bebas Neue', sans-serif",fontSize:"36px",fontWeight:"800",letterSpacing:"0.05em",lineHeight:"1"}},countdown));
+  asg.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",marginTop:"6px"}},"until first pitch"));
+  wrap.appendChild(asg);
+
+  // Rules sections
+  const section = (emoji, title, items) => {
+    const card = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",padding:"18px",marginBottom:"12px"}});
+    card.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"14px"}},
+      h("span",{style:{fontSize:"18px"}},emoji),
+      h("span",{style:{color:C.accent,fontSize:"12px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em"}},title)
+    ));
+    items.forEach(item => {
+      const row = h("div",{style:{display:"flex",gap:"12px",marginBottom:"10px",alignItems:"flex-start"}});
+      row.appendChild(h("span",{style:{color:C.accent,fontWeight:"800",fontSize:"13px",minWidth:"20px",marginTop:"1px"}},item.num));
+      row.appendChild(h("span",{style:{color:C.text,fontSize:"13px",lineHeight:"1.6"}},item.text));
+      card.appendChild(row);
+    });
+    return card;
+  };
+
+  wrap.appendChild(section("📋","Format",[
+    {num:"1", text:"Draft 8 players — no bench, no active roster management. You live with injury and suspension luck."},
+    {num:"2", text:"1 of your 8 picks is designated as your HBP player. Their HRs do not count toward your team total."},
+    {num:"3", text:"Scoring: Home Runs + Hit By Pitches = Total Points."},
+  ]));
+
+  wrap.appendChild(section("🔄","Transactions",[
+    {num:"1", text:"You are allowed 1 roster move (add/drop) anytime before the All-Star Game first pitch (July 14 @ 8:00 PM ET)."},
+    {num:"2", text:"After acquisition, you only collect the new player's HRs or HBPs from that point forward. Stats before the add date do not count."},
+    {num:"3", text:"The All-Star Game first pitch is the hard trade deadline. No moves after that."},
+  ]));
+
+  wrap.appendChild(section("🏆","Prize",[
+    {num:"🥇", text:"1st Place wins a custom MLB jersey of a player from their fantasy team, with a custom patch. Cost split by the two losers."},
+  ]));
+
+  wrap.appendChild(section("💀","Punishment — 2nd & Last Place",[
+    {num:"⚠️", text:"TBD..."},
+  ]));
+
+  wrap.appendChild(section("⚔️","Tiebreaker",[
+    {num:"1", text:"Head-to-head Home Run Derby at a softball field. Must be pitched by another human."},
+    {num:"2", text:"+3 HR bonus if your dad pitches for you."},
+  ]));
+
+  return wrap;
 }
 
 // ── Debug ─────────────────────────────────────────────────────────────────────
@@ -1625,7 +1699,7 @@ function render() {
   app.appendChild(header);
 
   // Tabs
-  const tabs=[{id:"standings",label:"🏆 Standings"},{id:"rosters",label:"📋 Rosters"},{id:"leaderboard",label:"📊 Leaderboard"},{id:"projected",label:"🔮 Projected"},{id:"scores",label:"⚾ Scores"},{id:"weekly",label:"📰 Weekly Recap"},{id:"yesterday",label:"📅 Yesterday"},{id:"debug",label:"🔍 Debug"}];
+  const tabs=[{id:"standings",label:"🏆 Standings"},{id:"rosters",label:"📋 Rosters"},{id:"leaderboard",label:"📊 Leaderboard"},{id:"projected",label:"🔮 Projected"},{id:"scores",label:"⚾ Scores"},{id:"weekly",label:"📰 Weekly Recap"},{id:"yesterday",label:"📅 Yesterday"},{id:"rules",label:"📖 Rules"},{id:"debug",label:"🔍 Debug"}];
   const tabBar=h("div",{style:{borderBottom:`1px solid ${C.border}`,background:C.surface}});
   const tabInner=h("div",{style:{maxWidth:"640px",margin:"0 auto",display:"flex",padding:"0 16px",overflowX:"auto"}});
   tabs.forEach(tab=>{
@@ -1644,6 +1718,7 @@ function render() {
   else if(S.tab==="scores") body.appendChild(buildScores());
   else if(S.tab==="weekly") body.appendChild(buildWeeklyRecap());
   else if(S.tab==="yesterday") body.appendChild(buildYesterday());
+  else if(S.tab==="rules") body.appendChild(buildRules());
   else if(S.tab==="debug") body.appendChild(buildDebug());
   app.appendChild(body);
 
@@ -1659,6 +1734,7 @@ function handleLogin() {
 }
 
 render();
+setInterval(() => { if(S.tab === "rules") render(); }, 1000);
 </script>
 </body>
 </html>
