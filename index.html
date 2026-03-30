@@ -934,18 +934,18 @@ async function loadScores() {
   set({scLoading:true,scDone:false,scResults:null});
   try {
     const today = new Date().toISOString().split("T")[0];
-    const r = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}`);
+    const r = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&expand=schedule.teams`);
     if(!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     const games = d.dates?.[0]?.games || [];
     const results = games.map(g => ({
-      awayAbbr: g.teams?.away?.team?.abbreviation || "?",
-      awayName: g.teams?.away?.team?.teamName || "",
+      awayAbbr: g.teams?.away?.team?.abbreviation || g.teams?.away?.team?.teamCode?.toUpperCase() || "?",
+      awayName: g.teams?.away?.team?.teamName || g.teams?.away?.team?.name || "",
       awayScore: g.teams?.away?.score ?? "-",
-      homeAbbr: g.teams?.home?.team?.abbreviation || "?",
-      homeName: g.teams?.home?.team?.teamName || "",
+      homeAbbr: g.teams?.home?.team?.abbreviation || g.teams?.home?.team?.teamCode?.toUpperCase() || "?",
+      homeName: g.teams?.home?.team?.teamName || g.teams?.home?.team?.name || "",
       homeScore: g.teams?.home?.score ?? "-",
-      status: g.status?.detailedState || g.status?.abstractGameState || "Preview",
+      status: g.status?.detailedState || g.status?.abstractGameState || "Scheduled",
       gameTime: g.gameDate ? new Date(g.gameDate).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) : null,
     }));
     set({scLoading:false,scDone:true,scResults:results});
