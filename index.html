@@ -262,6 +262,7 @@ let S = {
   selectedTeam: null,
   spotlightPlayer: null, spotlightData: null, spotlightLoading: false,
   projectedTeam: null,
+  hotFilter: "all",
   commishInput: "", commishUnlocked: false, showCommish: false, pwError: false,
   refreshing: false, refreshStatus: "",
   // commissioner panel
@@ -820,7 +821,10 @@ function buildHot() {
   const daysPassed = Math.max(1, Math.floor((today - seasonStart) / (1000*60*60*24)));
   const gamesPlayed = Math.min(Math.round(daysPassed * 0.92), TOTAL_GAMES);
 
-  // Collect all active players with stats
+  // Active team filter stored in state (default: "all")
+  const activeTeam = S.hotFilter || "all";
+
+  // Collect all active players with heat data
   const allPlayers = [];
   S.teams.forEach(ft => {
     (ft.players||[]).forEach(p => {
@@ -829,98 +833,98 @@ function buildHot() {
       const preseason = PRESEASON_PROJ[p.name] ?? null;
       const seasonRate = actual / Math.max(gamesPlayed, 1);
       const seasonPace = Math.round(seasonRate * TOTAL_GAMES);
-      // Heat score: actual pace vs preseason projection
-      // >20% above preseason = 🔥🔥🔥, >0% = 🔥🔥, within 20% below = 🔥, more than 20% below = ❄️
-      let heatScore = 0;
-      let heatLabel = "";
-      let heatColor = C.muted;
+      let heatScore = 0, heatLabel = "", heatColor = C.muted;
       if(preseason && preseason > 0) {
         const pct = (seasonPace - preseason) / preseason;
-        if(pct >= 0.20) { heatScore = 3; heatLabel = "🔥🔥🔥"; heatColor = "#ff4444"; }
-        else if(pct >= 0) { heatScore = 2; heatLabel = "🔥🔥"; heatColor = C.red; }
-        else if(pct >= -0.20) { heatScore = 1; heatLabel = "🔥"; heatColor = C.accent; }
-        else { heatScore = 0; heatLabel = "❄️"; heatColor = "#6ab0ff"; }
+        if(pct >= 0.20)       { heatScore=3; heatLabel="🔥🔥🔥"; heatColor="#ff4444"; }
+        else if(pct >= 0)     { heatScore=2; heatLabel="🔥🔥";   heatColor=C.red; }
+        else if(pct >= -0.20) { heatScore=1; heatLabel="🔥";     heatColor=C.accent; }
+        else                  { heatScore=0; heatLabel="❄️";     heatColor="#6ab0ff"; }
       }
-      allPlayers.push({
-        name: p.name,
-        teamName: ft.name,
-        type: p.type,
-        actual,
-        preseason,
-        seasonPace,
-        heatScore,
-        heatLabel,
-        heatColor,
-        teamAbbr: p.teamAbbr || "",
-      });
+      allPlayers.push({ name:p.name, teamName:ft.name, teamId:ft.id, type:p.type, actual, preseason, seasonPace, heatScore, heatLabel, heatColor, teamAbbr:p.teamAbbr||"" });
     });
   });
 
-  // Sort: hot first (heatScore desc), then by pace desc
-  allPlayers.sort((a,b) => b.heatScore - a.heatScore || b.seasonPace - a.seasonPace);
-
   const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
+
+  // Header
   wrap.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px"}},
     h("span",{style:{fontSize:"20px"}},"🔥"),
     h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Who's Hot")
   ));
-  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"20px"}},
-    `Based on ${gamesPlayed}-game pace vs Steamer preseason projection · 🔥🔥🔥 = 20%+ above proj · 🔥🔥 = on pace · 🔥 = slightly below · ❄️ = cold`
+  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"16px"}},
+    `${gamesPlayed}-game pace vs Steamer projection · 🔥🔥🔥 = 20%+ above · 🔥🔥 = on pace · 🔥 = slightly below · ❄️ = cold`
   ));
 
-  // Split into HR and HBP
-  const hrPlayers = allPlayers.filter(p => p.type === "hr");
-  const hbpPlayers = allPlayers.filter(p => p.type === "hbp");
+  // Team filter pill tabs
+  const filterWrap = h("div",{style:{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"20px"}});
+  const allTeams = [{id:"all", name:"All Teams"}, ...S.teams.map(t=>({id:String(t.id), name:t.name}))];
+  allTeams.forEach(team => {
+    const isActive = activeTeam === team.id;
+    const pill = h("button",{
+      style:{
+        padding:"5px 12px", borderRadius:"20px", fontSize:"11px", fontWeight:"700", cursor:"pointer",
+        border:`1px solid ${isActive ? C.accent : C.border}`,
+        background: isActive ? C.accent : "transparent",
+        color: isActive ? "#000" : C.muted,
+        transition:"all 0.15s"
+      },
+      onClick:()=>set({hotFilter: team.id})
+    }, team.id === "all" ? "All Teams" : team.name.length > 12 ? team.name.split(" ").slice(0,2).join(" ") : team.name);
+    filterWrap.appendChild(pill);
+  });
+  wrap.appendChild(filterWrap);
+
+  // Filter players
+  const filtered = activeTeam === "all"
+    ? allPlayers
+    : allPlayers.filter(p => String(p.teamId) === activeTeam);
+
+  const hrPlayers = filtered.filter(p=>p.type==="hr").sort((a,b)=>b.heatScore-a.heatScore||b.seasonPace-a.seasonPace);
+  const hbpPlayers = filtered.filter(p=>p.type==="hbp").sort((a,b)=>b.heatScore-a.heatScore||b.seasonPace-a.seasonPace);
 
   const renderSection = (players, label, statLabel, color) => {
-    const section = h("div",{style:{marginBottom:"24px"}});
-    section.appendChild(h("div",{style:{color,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"10px"}},label));
+    if(players.length === 0) return null;
+    const section = h("div",{style:{marginBottom:"20px"}});
+    section.appendChild(h("div",{style:{color,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"8px"}},label));
     const list = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",overflow:"hidden"}});
-    players.forEach((p, i) => {
+    players.forEach((p,i) => {
       const row = h("div",{style:{
-        display:"flex",justifyContent:"space-between",alignItems:"center",
-        padding:"11px 16px",
-        borderBottom: i < players.length-1 ? `1px solid ${C.border}22` : "none",
-        background: p.heatScore === 3 ? `${p.heatColor}08` : "transparent"
+        display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 16px",
+        borderBottom:i<players.length-1?`1px solid ${C.border}22`:"none",
+        background:p.heatScore===3?`${p.heatColor}08`:"transparent"
       }});
-
       const left = h("div",{style:{flex:"1",minWidth:0}});
       const nameRow = h("div",{style:{display:"flex",alignItems:"center",gap:"6px",marginBottom:"3px"}});
       nameRow.appendChild(h("span",{style:{fontSize:"16px",lineHeight:"1"}},p.heatLabel));
-      nameRow.appendChild(h("span",{style:{color:C.text,fontWeight:"700",fontSize:"14px",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},p.name));
+      nameRow.appendChild(h("span",{style:{color:C.text,fontWeight:"700",fontSize:"14px"}},p.name));
       if(p.teamAbbr) nameRow.appendChild(h("span",{style:{color:C.muted,fontSize:"11px"}},`(${p.teamAbbr})`));
       left.appendChild(nameRow);
-      left.appendChild(h("div",{style:{color:C.muted,fontSize:"11px"}},p.teamName));
-
+      if(activeTeam === "all") left.appendChild(h("div",{style:{color:C.muted,fontSize:"11px"}},p.teamName));
       const right = h("div",{style:{textAlign:"right",flexShrink:0,marginLeft:"12px"}});
       right.appendChild(h("div",{style:{display:"flex",alignItems:"baseline",gap:"4px",justifyContent:"flex-end"}},
         h("span",{style:{color:p.heatColor,fontFamily:"'Bebas Neue', sans-serif",fontSize:"24px",fontWeight:"800",lineHeight:"1"}},p.actual),
         h("span",{style:{color:C.muted,fontSize:"10px",textTransform:"uppercase"}},statLabel)
       ));
-      // Pace vs projection
       const diff = p.preseason ? p.seasonPace - p.preseason : null;
-      const diffStr = diff !== null ? (diff >= 0 ? `+${diff}` : `${diff}`) : "";
-      const diffColor = diff === null ? C.muted : diff >= 0 ? "#4caf50" : "#6ab0ff";
+      const diffStr = diff!==null?(diff>=0?`+${diff}`:`${diff}`):"";
+      const diffColor = diff===null?C.muted:diff>=0?"#4caf50":"#6ab0ff";
       right.appendChild(h("div",{style:{color:C.muted,fontSize:"11px"}},
         p.preseason
-          ? h("span",{},
-              `pace: `,
-              h("span",{style:{color:p.heatColor,fontWeight:"700"}},p.seasonPace),
-              ` proj: ${p.preseason} `,
-              h("span",{style:{color:diffColor,fontWeight:"700"}},diffStr)
-            )
+          ? h("span",{},`pace: `,h("span",{style:{color:p.heatColor,fontWeight:"700"}},p.seasonPace),` proj: ${p.preseason} `,h("span",{style:{color:diffColor,fontWeight:"700"}},diffStr))
           : `pace: ${p.seasonPace}`
       ));
-
-      row.append(left, right);
+      row.append(left,right);
       list.appendChild(row);
     });
     section.appendChild(list);
     return section;
   };
 
-  wrap.appendChild(renderSection(hrPlayers, "⚾ HR Players", "HR", C.red));
-  wrap.appendChild(renderSection(hbpPlayers, "🎯 HBP Players", "HBP", C.green));
+  const hrSection = renderSection(hrPlayers,"⚾ HR Players","HR",C.red);
+  const hbpSection = renderSection(hbpPlayers,"🎯 HBP Player","HBP",C.green);
+  if(hrSection) wrap.appendChild(hrSection);
+  if(hbpSection) wrap.appendChild(hbpSection);
 
   wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",textAlign:"center",marginTop:"4px"}},"Refresh Stats to update · Early season = small sample size"));
   return wrap;
