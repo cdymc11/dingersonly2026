@@ -856,24 +856,26 @@ function buildHot() {
     `${gamesPlayed}-game pace vs Steamer projection · 🔥🔥🔥 = 20%+ above · 🔥🔥 = on pace · 🔥 = slightly below · ❄️ = cold`
   ));
 
-  // Team filter pill tabs
-  const filterWrap = h("div",{style:{display:"flex",flexWrap:"wrap",gap:"6px",marginBottom:"20px"}});
+  // Team filter tab bar — same style as main nav
+  const filterBar = h("div",{style:{borderBottom:`1px solid ${C.border}`,margin:"0 -16px",marginBottom:"20px"}});
+  const filterInner = h("div",{style:{display:"flex",overflowX:"auto",padding:"0 16px"}});
   const allTeams = [{id:"all", name:"All Teams"}, ...S.teams.map(t=>({id:String(t.id), name:t.name}))];
   allTeams.forEach(team => {
     const isActive = activeTeam === team.id;
-    const pill = h("button",{
+    filterInner.appendChild(h("button",{
+      class:"tab-btn",
       style:{
-        padding:"5px 12px", borderRadius:"20px", fontSize:"11px", fontWeight:"700", cursor:"pointer",
-        border:`1px solid ${isActive ? C.accent : C.border}`,
-        background: isActive ? C.accent : "transparent",
-        color: isActive ? "#000" : C.muted,
-        transition:"all 0.15s"
+        padding:"11px 14px", background:"none", border:"none",
+        borderBottom: isActive ? `2px solid ${C.accent}` : "2px solid transparent",
+        color: isActive ? C.accent : C.muted,
+        fontWeight: isActive ? "700" : "500",
+        fontSize:"12px", cursor:"pointer", whiteSpace:"nowrap"
       },
       onClick:()=>set({hotFilter: team.id})
-    }, team.id === "all" ? "All Teams" : team.name.length > 12 ? team.name.split(" ").slice(0,2).join(" ") : team.name);
-    filterWrap.appendChild(pill);
+    }, team.name));
   });
-  wrap.appendChild(filterWrap);
+  filterBar.appendChild(filterInner);
+  wrap.appendChild(filterBar);
 
   // Filter players
   const filtered = activeTeam === "all"
