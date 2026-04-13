@@ -30,7 +30,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // ── Firebase ──────────────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -44,6 +44,56 @@ const firebaseConfig = {
 const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
 const leagueRef = doc(db, "league", "data");
+const historyCol = collection(db, "history");
+
+// Save a weekly snapshot — called automatically on Mondays & manually by commish
+async function saveHistorySnapshot(label) {
+  try {
+    const now = new Date();
+    const weekLabel = label || `Week of ${now.toLocaleDateString("en-US",{month:"short",day:"numeric"})}`;
+    const docId = now.toISOString().split("T")[0]; // YYYY-MM-DD as doc ID
+    const snapshot = S.teams.map(t => ({
+      id: t.id,
+      name: t.name,
+      owner: t.owner || "",
+      score: score(t),
+    })).sort((a,b) => b.score - a.score);
+    await setDoc(doc(db,"history",docId), { label: weekLabel, date: docId, standings: snapshot });
+    return true;
+  } catch(e) {
+    console.error("History save failed:", e);
+    return false;
+  }
+}
+
+// Load all history snapshots from Firebase
+async function loadHistory() {
+  set({historyLoading: true});
+  try {
+    const q = query(historyCol, orderBy("date","asc"));
+    const snap = await getDocs(q);
+    const weeks = snap.docs.map(d => d.data());
+    set({historyWeeks: weeks, historyLoading: false, historyWeekIdx: weeks.length - 1});
+  } catch(e) {
+    set({historyWeeks: [], historyLoading: false});
+  }
+}
+
+// Auto-snapshot every Monday — checks once on load
+function maybeAutoSnapshot() {
+  const now = new Date();
+  if(now.getDay() !== 1) return; // only on Monday
+  const todayStr = now.toISOString().split("T")[0];
+  const lastSnap = localStorage.getItem("lastHistorySnap");
+  if(lastSnap === todayStr) return; // already snapped today
+  // Wait until stats are loaded (give it 5s after firebase sync)
+  setTimeout(async () => {
+    if(S.teams && S.teams.some(t => score(t) > 0)) {
+      const ok = await saveHistorySnapshot();
+      if(ok) localStorage.setItem("lastHistorySnap", todayStr);
+    }
+  }, 5000);
+}
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const PASS = "dingers2026";
@@ -263,6 +313,7 @@ let S = {
   spotlightPlayer: null, spotlightData: null, spotlightLoading: false,
   projectedTeam: null,
   hotFilter: "all",
+  historyWeeks: null, historyLoading: false, historyWeekIdx: 0,
   commishInput: "", commishUnlocked: false, showCommish: false, pwError: false,
   refreshing: false, refreshStatus: "",
   // commissioner panel
@@ -329,6 +380,7 @@ onSnapshot(leagueRef, snap => {
         }
       });
       set({ teams: merged, lastUpdated: data.lastUpdated||null });
+      maybeAutoSnapshot();
     }
   }
 });
@@ -1217,6 +1269,106 @@ async function loadWeeklyRecap(startDate, endDate) {
   }
 }
 
+// ── History ───────────────────────────────────────────────────────────────────
+function buildHistory() {
+  // Trigger load if not yet loaded
+  if(S.historyWeeks === null && !S.historyLoading) loadHistory();
+
+  const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
+  wrap.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px"}},
+    h("span",{style:{fontSize:"20px"}},"📈"),
+    h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Season History")
+  ));
+  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"20px"}},"Weekly standings snapshots · Saved automatically every Monday"));
+
+  if(S.historyLoading) { wrap.appendChild(spinner("Loading history…")); return wrap; }
+
+  if(!S.historyWeeks || S.historyWeeks.length === 0) {
+    wrap.appendChild(h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",padding:"32px",textAlign:"center"}},
+      h("div",{style:{fontSize:"32px",marginBottom:"8px"}},"📭"),
+      h("div",{style:{color:C.text,fontWeight:"700",fontSize:"16px",marginBottom:"6px"}},"No snapshots yet"),
+      h("div",{style:{color:C.muted,fontSize:"13px",marginBottom:"20px"}},"History saves automatically every Monday. You can also save a snapshot now."),
+      S.commishUnlocked ? h("button",{style:{padding:"10px 24px",borderRadius:"8px",cursor:"pointer",background:C.accent,border:"none",color:"#000",fontWeight:"700",fontSize:"13px"},onClick:async()=>{
+        const ok = await saveHistorySnapshot(`Week of ${new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})}`);
+        if(ok) { loadHistory(); }
+      }},"💾 Save Snapshot Now") : h("div",{style:{color:C.muted,fontSize:"12px"}},"Enter commissioner PIN to save a snapshot manually")
+    ));
+    return wrap;
+  }
+
+  const weeks = S.historyWeeks;
+  const idx = Math.max(0, Math.min(S.historyWeekIdx, weeks.length - 1));
+  const current = weeks[idx];
+  const prev = idx > 0 ? weeks[idx - 1] : null;
+
+  // Week selector
+  const selector = h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.card,border:`1px solid ${C.border}`,borderRadius:"10px",padding:"10px 16px",marginBottom:"20px"}});
+  selector.appendChild(h("button",{style:{background:"none",border:"none",color:idx>0?C.accent:C.border,fontSize:"22px",cursor:idx>0?"pointer":"default",padding:"0 4px"},onClick:()=>idx>0&&set({historyWeekIdx:idx-1})},"‹"));
+  const midEl = h("div",{style:{textAlign:"center"}});
+  midEl.appendChild(h("div",{style:{color:C.text,fontWeight:"700",fontSize:"14px"}},current.label));
+  midEl.appendChild(h("div",{style:{color:C.muted,fontSize:"11px"}},`${idx+1} of ${weeks.length}`));
+  selector.appendChild(midEl);
+  selector.appendChild(h("button",{style:{background:"none",border:"none",color:idx<weeks.length-1?C.accent:C.border,fontSize:"22px",cursor:idx<weeks.length-1?"pointer":"default",padding:"0 4px"},onClick:()=>idx<weeks.length-1&&set({historyWeekIdx:idx+1})},"›"));
+  wrap.appendChild(selector);
+
+  // Standings for this week
+  const list = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",overflow:"hidden",marginBottom:"20px"}});
+  current.standings.forEach((team, i) => {
+    const prevRank = prev ? prev.standings.findIndex(t=>t.id===team.id) : -1;
+    const movement = prev && prevRank !== -1 ? prevRank - i : null; // positive = moved up
+    let movEl;
+    if(movement === null) movEl = h("span",{style:{color:C.muted,fontSize:"12px"}},"—");
+    else if(movement > 0) movEl = h("span",{style:{color:"#4caf50",fontSize:"12px",fontWeight:"700"}},`↑${movement}`);
+    else if(movement < 0) movEl = h("span",{style:{color:"#6ab0ff",fontSize:"12px",fontWeight:"700"}},`↓${Math.abs(movement)}`);
+    else movEl = h("span",{style:{color:C.muted,fontSize:"12px"}},"—");
+
+    const isFirst = i === 0;
+    const isLast = i === current.standings.length - 1;
+    const row = h("div",{style:{
+      display:"flex",alignItems:"center",gap:"12px",padding:"12px 16px",
+      borderBottom:i<current.standings.length-1?`1px solid ${C.border}22`:"none",
+      background:isFirst?`${C.accent}08`:isLast?`#6ab0ff08`:"transparent"
+    }});
+
+    // Rank
+    let rankEl;
+    if(isFirst) rankEl = h("span",{style:{fontSize:"18px",minWidth:"28px",textAlign:"center"}},"🥇");
+    else if(isLast) rankEl = h("span",{style:{fontSize:"18px",minWidth:"28px",textAlign:"center"}},"💀");
+    else rankEl = h("span",{style:{color:C.muted,fontWeight:"700",fontSize:"13px",minWidth:"28px",textAlign:"center"}},`#${i+1}`);
+    row.appendChild(rankEl);
+
+    // Team info
+    const info = h("div",{style:{flex:"1"}});
+    info.appendChild(h("div",{style:{color:C.text,fontWeight:"700",fontSize:"14px"}},team.name));
+    info.appendChild(h("div",{style:{color:C.muted,fontSize:"11px"}},team.owner));
+    row.appendChild(info);
+
+    // Movement
+    row.appendChild(movEl);
+
+    // Score
+    const scoreEl = h("div",{style:{textAlign:"right",minWidth:"48px"}});
+    scoreEl.appendChild(h("div",{style:{color:C.accent,fontFamily:"'Bebas Neue', sans-serif",fontSize:"26px",fontWeight:"800",lineHeight:"1"}},team.score));
+    scoreEl.appendChild(h("div",{style:{color:C.muted,fontSize:"10px",textTransform:"uppercase"}},"pts"));
+    row.appendChild(scoreEl);
+    list.appendChild(row);
+  });
+  wrap.appendChild(list);
+
+  // Commish save button
+  if(S.commishUnlocked) {
+    wrap.appendChild(h("button",{
+      style:{width:"100%",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"13px"},
+      onClick:async()=>{
+        const ok = await saveHistorySnapshot(`Week of ${new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})}`);
+        if(ok) loadHistory();
+      }
+    },"💾 Save Snapshot Now"));
+  }
+
+  return wrap;
+}
+
 // ── Rules ─────────────────────────────────────────────────────────────────────
 function buildRules() {
   // All-Star Game: July 14, 2026 @ 8:00 PM ET = midnight UTC July 15
@@ -1801,7 +1953,7 @@ function render() {
   app.appendChild(header);
 
   // Tabs
-  const tabs=[{id:"standings",label:"🏆 Standings"},{id:"rosters",label:"📋 Rosters"},{id:"leaderboard",label:"📊 Leaderboard"},{id:"projected",label:"🔮 Projected"},{id:"hot",label:"🔥 Hot"},{id:"scores",label:"⚾ Scores"},{id:"weekly",label:"📰 Weekly Recap"},{id:"yesterday",label:"📅 Yesterday"},{id:"rules",label:"📖 Rules"},...(S.commishUnlocked?[{id:"debug",label:"🔍 Debug"}]:[])];
+  const tabs=[{id:"standings",label:"🏆 Standings"},{id:"rosters",label:"📋 Rosters"},{id:"leaderboard",label:"📊 Leaderboard"},{id:"projected",label:"🔮 Projected"},{id:"hot",label:"🔥 Hot"},{id:"scores",label:"⚾ Scores"},{id:"weekly",label:"📰 Weekly Recap"},{id:"yesterday",label:"📅 Yesterday"},{id:"history",label:"📈 History"},{id:"rules",label:"📖 Rules"},...(S.commishUnlocked?[{id:"debug",label:"🔍 Debug"}]:[])];
   const tabBar=h("div",{style:{borderBottom:`1px solid ${C.border}`,background:C.surface}});
   const tabInner=h("div",{style:{maxWidth:"640px",margin:"0 auto",display:"flex",padding:"0 16px",overflowX:"auto"}});
   tabs.forEach(tab=>{
@@ -1821,6 +1973,7 @@ function render() {
   else if(S.tab==="scores") body.appendChild(buildScores());
   else if(S.tab==="weekly") body.appendChild(buildWeeklyRecap());
   else if(S.tab==="yesterday") body.appendChild(buildYesterday());
+  else if(S.tab==="history") body.appendChild(buildHistory());
   else if(S.tab==="rules") body.appendChild(buildRules());
   else if(S.tab==="debug") body.appendChild(buildDebug());
   app.appendChild(body);
