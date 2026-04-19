@@ -728,6 +728,47 @@ async function loadYesterday() {
   set({ydLoading:false,ydDone:true,ydResults:hits});
 }
 
+async function loadWeeklyRecap(startDate, endDate) {
+  set({wkLoading:true,wkDone:false,wkResults:null});
+  const season = new Date().getFullYear();
+  const teamWeeks = S.teams.map(t=>({id:t.id, name:t.name, hr:0, hbp:0, pts:0}));
+  const allPlayers = [];
+  try {
+    for(const ft of S.teams) {
+      const tw = teamWeeks.find(t=>t.id===ft.id);
+      for(const p of (ft.players||[])) {
+        if(!p.name?.trim()) continue;
+        const playerId = PLAYER_IDS[p.name]; if(!playerId) continue;
+        try {
+          const r = await fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=gameLog&group=hitting&season=${season}&startDate=${startDate}&endDate=${endDate}&sportId=1`);
+          if(!r.ok) continue;
+          const d = await r.json();
+          const splits = d.stats?.[0]?.splits||[];
+          let hr=0,hbp=0;
+          splits.forEach(s=>{ hr+=s.stat?.homeRuns??0; hbp+=s.stat?.hitByPitch??0; });
+          const pts = p.type==="hr"?hr:hbp;
+          if(p.type==="hr") tw.hr+=hr;
+          if(p.type==="hbp") tw.hbp+=hbp;
+          tw.pts+=pts;
+          allPlayers.push({name:p.name,fantasyTeam:ft.name,type:p.type,pts,hr,hbp});
+        } catch(e){continue;}
+      }
+    }
+    const hrPlayers = allPlayers.filter(p=>p.type==="hr").sort((a,b)=>b.pts-a.pts);
+    const hbpPlayers = allPlayers.filter(p=>p.type==="hbp").sort((a,b)=>b.pts-a.pts);
+    const topTeam = [...teamWeeks].sort((a,b)=>b.pts-a.pts)[0];
+    set({wkLoading:false,wkDone:true,wkResults:{
+      teamWeeks,
+      allPlayers,
+      topHR: hrPlayers[0]?{name:hrPlayers[0].name,val:hrPlayers[0].pts}:null,
+      topHBP: hbpPlayers[0]?{name:hbpPlayers[0].name,val:hbpPlayers[0].pts}:null,
+      teamOfWeek: topTeam?{name:topTeam.name,pts:topTeam.pts}:null,
+    }});
+  } catch(e) {
+    set({wkLoading:false,wkDone:true,wkResults:null});
+  }
+}
+
 // ── History ───────────────────────────────────────────────────────────────────
 function buildHistory() {
   // Trigger load if not yet loaded
