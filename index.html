@@ -827,7 +827,7 @@ function buildRecent() {
   const lastMon = new Date(lastSun); lastMon.setDate(lastSun.getDate()-6);
   const fmt = d => d.toLocaleDateString("en-US",{month:"short",day:"numeric"});
   const fmtISO = d => d.toISOString().split("T")[0];
-  const weekLabel = `${fmt(lastMon)} – ${fmt(lastSun)}`;
+  const weekLabel = `${fmt(lastMon)} - ${fmt(lastSun)}`;
 
   wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"16px"}},weekLabel));
 
