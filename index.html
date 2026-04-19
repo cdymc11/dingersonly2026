@@ -2306,17 +2306,13 @@ function handleLogin() {
 render();
 setInterval(() => { if(S.tab === "rules") render(); }, 60000);
 
-// Dismiss splash — wait for both: animation (1.9s min) AND render to complete
+// Dismiss splash after animation (1.9s) + fade (0.6s)
 const splashEl = document.getElementById("splash-screen");
 if(splashEl) {
-  const dismissSplash = () => {
+  setTimeout(() => {
     splashEl.classList.add("fade-out");
     setTimeout(() => { if(splashEl.parentNode) splashEl.parentNode.removeChild(splashEl); }, 600);
-  };
-  // Enforce minimum 1.9s so animation plays, then dismiss immediately after render
-  const minWait = new Promise(res => setTimeout(res, 1900));
-  const renderDone = new Promise(res => { res(); }); // render() is sync so already done
-  Promise.all([minWait, renderDone]).then(dismissSplash);
+  }, 1900);
 }
 </script>
 
