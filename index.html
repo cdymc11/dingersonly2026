@@ -456,17 +456,35 @@ function playerName(p) {
   return wrap;
 }
 
+// ── Rank info builder (tie-aware) ─────────────────────────────────────────────
+function buildRankInfo(scores) {
+  const n = scores.length;
+  const result = scores.map(() => ({ icon: "", isSpecial: false }));
+  if(n === 0) return result;
+  const distinct = [...new Set(scores)].sort((a,b)=>b-a);
+  const highest = distinct[0];
+  const lowest = distinct[distinct.length - 1];
+  const secondDistinct = distinct.length > 1 ? distinct[1] : null;
+  scores.forEach((s, i) => {
+    if(s === highest) {
+      result[i] = { icon: "🥇", isSpecial: true };
+    } else if(s === lowest || (secondDistinct !== null && s === secondDistinct)) {
+      result[i] = { icon: "💀", isSpecial: true };
+    } else {
+      const rank = distinct.indexOf(s) + 1;
+      result[i] = { icon: `#${rank}`, isSpecial: false };
+    }
+  });
+  return result;
+}
+
 // ── Standings ─────────────────────────────────────────────────────────────────
 function buildStandings() {
   const sorted = [...S.teams].sort((a,b)=>score(b)-score(a));
-  const lastIdx = sorted.length - 1;
-  function rankIcon(i) {
-    if(i === 0) return "🥇";
-    if(i === 1) return "💀";
-    if(i === lastIdx) return "💀";
-    return `#${i+1}`;
-  }
-  function rankSize(i) { return (i===0||i===1||i===lastIdx) ? "20px" : "14px"; }
+  const scores = sorted.map(t=>score(t));
+  const rankInfo = buildRankInfo(scores);
+  function rankIcon(i) { return rankInfo[i].icon; }
+  function rankSize(i) { return rankInfo[i].isSpecial ? "20px" : "14px"; }
   const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
   const hdr = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"}},
     h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Standings"),
