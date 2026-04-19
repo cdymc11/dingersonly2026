@@ -775,6 +775,430 @@ async function loadWeeklyRecap(startDate, endDate) {
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
+function buildProjected() {
+  const TOTAL_GAMES = 162;
+  const seasonStart = new Date("2026-03-26");
+  const today = new Date();
+  const daysPassed = Math.max(1, Math.floor((today - seasonStart) / (1000*60*60*24)));
+  const gamesPlayed = Math.min(Math.round(daysPassed * 0.92), TOTAL_GAMES);
+  const gamesRemaining = TOTAL_GAMES - gamesPlayed;
+  // Weight: how much to trust actual pace vs preseason projection
+  // Starts at 0.1 (10% pace, 90% preseason), reaches 0.9 by game 145
+  const paceWeight = Math.min(0.9, gamesPlayed / TOTAL_GAMES * 1.6);
+  const projWeight = 1 - paceWeight;
+
+  const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
+  wrap.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px"}},
+    h("span",{style:{fontSize:"20px"}},"🔮"),
+    h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Projected Final Rankings")
+  ));
+  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"20px"}},"Blends preseason Steamer projections with current pace. Tap a team to see player breakdown."));
+
+  const projTeams = S.teams.map(team => {
+    const currentScore = score(team);
+    let projectedScore = currentScore;
+
+    (team.players||[]).forEach(p => {
+      if(!p.name?.trim()) return;
+      const preseason = PRESEASON_PROJ[p.name] ?? null;
+      const actual = p.type==="hr" ? (p.effectiveHR||0) : (p.effectiveHBP||0);
+
+      if(preseason === null) {
+        // No preseason data — fall back to pure pace
+        const rate = actual / Math.max(gamesPlayed, 1);
+        projectedScore += rate * gamesRemaining;
+      } else {
+        // Blended: pace-based remaining + preseason-based remaining
+        const paceRate = actual / Math.max(gamesPlayed, 1);
+        const paceRemaining = paceRate * gamesRemaining;
+        // Preseason remaining = full season proj - already earned at preseason rate
+        const preseasonRate = preseason / TOTAL_GAMES;
+        const preseasonRemaining = preseasonRate * gamesRemaining;
+        // Blend
+        projectedScore += (paceWeight * paceRemaining) + (projWeight * preseasonRemaining);
+      }
+    });
+
+    const projRemaining = Math.round(projectedScore - currentScore);
+    return { ...team, currentScore, gamesPlayed, gamesRemaining, projectedScore: Math.round(projectedScore), projRemaining };
+  });
+
+  const sorted = [...projTeams].sort((a,b)=>b.projectedScore-a.projectedScore);
+  const maxProj = Math.max(...sorted.map(t=>t.projectedScore),1);
+  const projRankInfo = buildRankInfo(sorted.map(t=>t.projectedScore));
+  function rankIcon(i) { return projRankInfo[i].icon; }
+  function rankSize(i) { return projRankInfo[i].isSpecial ? "20px" : "14px"; }
+
+  // Season progress bar
+  const progressPct = Math.round((gamesPlayed/TOTAL_GAMES)*100);
+  const blendLabel = `${Math.round(projWeight*100)}% preseason · ${Math.round(paceWeight*100)}% pace`;
+  wrap.appendChild(h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"10px",padding:"12px 16px",marginBottom:"20px"}},
+    h("div",{style:{display:"flex",justifyContent:"space-between",fontSize:"11px",color:C.muted,marginBottom:"6px"}},
+      h("span",{},`Game ${gamesPlayed} of ${TOTAL_GAMES}`),
+      h("span",{},blendLabel)
+    ),
+    h("div",{style:{height:"4px",background:C.bg,borderRadius:"2px",overflow:"hidden"}},
+      h("div",{style:{height:"100%",width:`${progressPct}%`,background:`linear-gradient(90deg,${C.accent},${C.red})`,borderRadius:"2px"}})
+    )
+  ));
+
+  sorted.forEach((team,i)=>{
+    const pct = (team.projectedScore/maxProj)*100;
+    const isFirst = projRankInfo[i].icon === "🥇";
+    const card = h("div",{class:"row-hover",style:{background:C.card,border:`1px solid ${isFirst?C.accent+"55":C.border}`,borderRadius:"12px",padding:"14px 18px",marginBottom:"10px",boxShadow:isFirst?`0 0 20px ${C.accent}18`:"none",cursor:"pointer"},onClick:()=>set({projectedTeam:{team, gamesPlayed, gamesRemaining, paceWeight, projWeight}})});
+    const topRow = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}});
+    topRow.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"10px"}},
+      h("span",{style:{fontSize:rankSize(i),fontWeight:"700",color:C.muted,minWidth:"28px"}},rankIcon(i)),
+      h("div",{},
+        h("div",{style:{color:C.text,fontWeight:"700",fontSize:"15px"}},team.name),
+        h("div",{style:{color:C.muted,fontSize:"11px"}},team.owner||"")
+      )
+    ));
+    const rightCol = h("div",{style:{textAlign:"right"}});
+    rightCol.appendChild(h("div",{style:{color:C.accent,fontFamily:"'Bebas Neue', sans-serif",fontSize:"28px",fontWeight:"800",lineHeight:"1"}},team.projectedScore));
+    rightCol.appendChild(h("div",{style:{color:C.muted,fontSize:"10px",textTransform:"uppercase"}},"proj pts"));
+    topRow.appendChild(rightCol);
+    card.appendChild(topRow);
+    const barWrap = h("div",{style:{height:"4px",background:C.bg,borderRadius:"2px",overflow:"hidden",marginBottom:"8px"}});
+    barWrap.appendChild(h("div",{style:{height:"100%",width:`${pct}%`,background:i===0?`linear-gradient(90deg,${C.accent},${C.red})`:`${C.accent}55`,borderRadius:"2px",transition:"width 0.6s ease"}}));
+    card.appendChild(barWrap);
+    card.appendChild(h("div",{style:{display:"flex",gap:"16px",fontSize:"11px",color:C.muted}},
+      h("span",{},`Now: ${team.currentScore} pts`),
+      h("span",{},`+${team.projRemaining} projected`),
+      h("span",{},`${team.gamesRemaining} games left`)
+    ));
+    wrap.appendChild(card);
+  });
+
+  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",marginTop:"8px",textAlign:"center",lineHeight:"1.6"}},
+    "Steamer 2026 preseason projections · Refresh Stats for latest actuals"
+  ));
+  return wrap;
+}
+
+// ── Who's Hot ─────────────────────────────────────────────────────────────────
+// ── Who's Hot ─────────────────────────────────────────────────────────────────
+async function loadHotL7() {
+  set({hotL7Loading:true, hotL7Done:false, hotL7:null});
+  const season = new Date().getFullYear();
+  const now = new Date();
+  const endDate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  const d7 = new Date(now); d7.setDate(d7.getDate()-7);
+  const startDate = `${d7.getFullYear()}-${String(d7.getMonth()+1).padStart(2,'0')}-${String(d7.getDate()).padStart(2,'0')}`;
+  const result = {}; // keyed by player name
+  try {
+    for(const ft of S.teams) {
+      for(const p of (ft.players||[])) {
+        if(!p.name?.trim()) continue;
+        const playerId = PLAYER_IDS[p.name]; if(!playerId) continue;
+        try {
+          const r = await fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=gameLog&group=hitting&season=${season}&startDate=${startDate}&endDate=${endDate}&sportId=1`);
+          if(!r.ok) continue;
+          const d = await r.json();
+          const splits = d.stats?.[0]?.splits||[];
+          let hr=0, hbp=0;
+          splits.forEach(s=>{ hr+=s.stat?.homeRuns??0; hbp+=s.stat?.hitByPitch??0; });
+          result[p.name] = p.type==="hr" ? hr : hbp;
+        } catch(e){ result[p.name]=0; }
+      }
+    }
+    set({hotL7:result, hotL7Loading:false, hotL7Done:true});
+  } catch(e) {
+    set({hotL7:null, hotL7Loading:false, hotL7Done:true});
+  }
+}
+
+function buildHot() {
+  const TOTAL_GAMES = 162;
+  const seasonStart = new Date("2026-03-26");
+  const today = new Date();
+  const daysPassed = Math.max(1, Math.floor((today - seasonStart) / (1000*60*60*24)));
+  const gamesPlayed = Math.min(Math.round(daysPassed * 0.92), TOTAL_GAMES);
+
+  const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
+  wrap.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px"}},
+    h("span",{style:{fontSize:"20px"}},"🔥"),
+    h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Who's Hot")
+  ));
+  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"16px"}},
+    `Last 7 days · then season pace vs Steamer projection · 🔥🔥🔥 = 20%+ above · 🔥🔥 = on pace · 🔥 = slightly below · ❄️ = cold`
+  ));
+
+  // L7 load button / status
+  if(!S.hotL7Done && !S.hotL7Loading) {
+    wrap.appendChild(h("button",{
+      style:{width:"100%",padding:"12px",borderRadius:"8px",cursor:"pointer",background:C.accent,border:"none",color:"#000",fontWeight:"700",fontSize:"14px",marginBottom:"20px"},
+      onClick:loadHotL7
+    },"Load Last 7 Days"));
+  } else if(S.hotL7Loading) {
+    wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",textAlign:"center",marginBottom:"16px",padding:"12px",background:C.card,borderRadius:"8px",border:`1px solid ${C.border}`}},
+      "⏳ Fetching last 7 days for all 64 players… this takes ~30 seconds"
+    ));
+  } else {
+    wrap.appendChild(h("button",{
+      style:{width:"100%",padding:"8px",borderRadius:"8px",cursor:"pointer",background:"transparent",border:`1px solid ${C.border}`,color:C.muted,fontSize:"12px",marginBottom:"16px"},
+      onClick:loadHotL7
+    },"⟳ Refresh Last 7 Days"));
+  }
+
+  const l7 = S.hotL7 || {};
+  const sorted = [...S.teams].sort((a,b)=>score(b)-score(a));
+
+  sorted.forEach((team, ti) => {
+    const card = h("div",{style:{background:C.card,border:`1px solid ${ti===0?C.accent+"44":C.border}`,borderRadius:"12px",marginBottom:"16px",overflow:"hidden"}});
+
+    // Team header
+    const thdr = h("div",{style:{background:ti===0?`${C.accent}11`:C.surface,padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${C.border}`}});
+    thdr.appendChild(h("div",{},
+      h("div",{style:{color:C.text,fontWeight:"800",fontSize:"16px"}},team.name),
+      team.owner ? h("div",{style:{color:C.muted,fontSize:"12px",marginTop:"2px"}},team.owner) : null
+    ));
+    // Column headers
+    thdr.appendChild(h("div",{style:{display:"flex",gap:"24px",textAlign:"right"}},
+      h("span",{style:{color:C.muted,fontSize:"10px",textTransform:"uppercase",minWidth:"28px"}},"L7"),
+      h("span",{style:{color:C.muted,fontSize:"10px",textTransform:"uppercase",minWidth:"60px"}},"season")
+    ));
+    card.appendChild(thdr);
+
+    const players = (team.players||[]).filter(p=>!p.droppedAt);
+    players.forEach((p, i) => {
+      const actual = p.type==="hr" ? (p.effectiveHR||0) : (p.effectiveHBP||0);
+      const preseason = PRESEASON_PROJ[p.name] ?? null;
+      const seasonRate = actual / Math.max(gamesPlayed, 1);
+      const seasonPace = Math.round(seasonRate * TOTAL_GAMES);
+      const l7val = S.hotL7Done ? (l7[p.name] ?? null) : null;
+
+      // Heat based on L7 if available, else season pace
+      let heatLabel = "—", heatColor = C.muted, diff = null;
+      if(preseason && preseason > 0) {
+        // Use L7 pace if loaded, else fall back to season pace
+        const compareVal = l7val !== null
+          ? Math.round((l7val / 7) * TOTAL_GAMES) // L7 pace to 162
+          : seasonPace;
+        const pct = (compareVal - preseason) / preseason;
+        diff = seasonPace - preseason;
+        if(pct >= 0.20)       { heatLabel="🔥🔥🔥"; heatColor="#ff4444"; }
+        else if(pct >= 0)     { heatLabel="🔥🔥";   heatColor=C.red; }
+        else if(pct >= -0.20) { heatLabel="🔥";     heatColor=C.accent; }
+        else                  { heatLabel="❄️";     heatColor="#6ab0ff"; }
+      }
+
+      const isHBP = p.type==="hbp";
+      const isLast = i === players.length-1;
+      const row = h("div",{
+        class:"row-hover",
+        style:{display:"flex",alignItems:"center",padding:"11px 18px",borderBottom:isLast?"none":`1px solid ${C.border}22`,background:isHBP?`${C.green}08`:"transparent",cursor:"pointer",gap:"8px"},
+        onClick:()=>openSpotlight(p.name,team.name,p.type)
+      });
+
+      // Heat emoji
+      row.appendChild(h("span",{style:{fontSize:"15px",lineHeight:"1",flexShrink:0}},heatLabel));
+
+      // Name + badge
+      const nameCol = h("div",{style:{flex:"1",minWidth:0}});
+      const nameEl = h("span",{style:{color:C.text,fontSize:"14px",fontWeight:"600"}},p.name);
+      if(p.teamAbbr) nameEl.appendChild(h("span",{style:{color:C.muted,fontWeight:"400",fontSize:"12px"}},` (${p.teamAbbr})`));
+      nameCol.appendChild(nameEl);
+      nameCol.appendChild(h("div",{style:{marginTop:"2px"}},badge(isHBP?"HBP":"HR",isHBP?C.green:C.red)));
+      row.appendChild(nameCol);
+
+      // L7 column
+      const l7Color = l7val===null ? C.muted : l7val>0 ? (isHBP?C.green:C.red) : C.muted;
+      row.appendChild(h("div",{style:{textAlign:"right",minWidth:"28px",flexShrink:0}},
+        h("div",{style:{color:l7Color,fontFamily:"'Bebas Neue', sans-serif",fontSize:"20px",fontWeight:"800",lineHeight:"1"}},
+          l7val !== null ? l7val : "—"
+        )
+      ));
+
+      // Season pace + diff
+      const diffStr = diff!==null ? (diff>=0?`+${diff}`:`${diff}`) : "";
+      const diffColor = diff===null?C.muted:diff>=0?"#4caf50":"#6ab0ff";
+      row.appendChild(h("div",{style:{textAlign:"right",minWidth:"60px",flexShrink:0}},
+        h("div",{style:{color:heatColor,fontFamily:"'Bebas Neue', sans-serif",fontSize:"20px",fontWeight:"800",lineHeight:"1"}},seasonPace),
+        preseason !== null
+          ? h("div",{style:{color:diffColor,fontSize:"10px",fontWeight:"700"}},diffStr===""?"—":diffStr)
+          : h("div",{style:{color:C.muted,fontSize:"10px"}},"—")
+      ));
+
+      card.appendChild(row);
+    });
+    wrap.appendChild(card);
+  });
+
+  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",textAlign:"center",marginTop:"4px"}},"Refresh Stats for latest season totals · L7 loads separately"));
+  return wrap;
+}
+
+// ── Scores ────────────────────────────────────────────────────────────────────
+function buildScores() {
+  const today = new Date();
+  const dateLabel = today.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"});
+
+  // Build set of all drafted teamAbbrs
+  const draftedAbbrs = new Set();
+  S.teams.forEach(ft => {
+    const hcTeam = HARDCODED_TEAMS.find(h => h.id === ft.id);
+    (ft.players||[]).forEach((p,i) => {
+      const abbr = p.teamAbbr || hcTeam?.players?.[i]?.teamAbbr || null;
+      if(abbr) draftedAbbrs.add(abbr);
+    });
+  });
+
+  const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
+  wrap.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"4px"}},
+    h("span",{style:{fontSize:"20px"}},"⚾"),
+    h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Today's Scores")
+  ));
+  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"4px"}},dateLabel));
+  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",marginBottom:"20px"}},"🌟 = has drafted players · When games show Final, wait 1-2 hours then refresh stats!"));
+
+  if(!S.scDone && !S.scLoading) {
+    wrap.appendChild(h("button",{style:{padding:"12px 28px",borderRadius:"8px",cursor:"pointer",background:C.accent,border:"none",color:"#000",fontWeight:"700",fontSize:"14px"},onClick:loadScores},"Load Today's Scores"));
+    return wrap;
+  }
+  if(S.scLoading) { wrap.appendChild(spinner("Loading scores…")); return wrap; }
+  if(!S.scResults || S.scResults.length === 0) {
+    wrap.appendChild(h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",padding:"28px",textAlign:"center"}},
+      h("div",{style:{fontSize:"32px",marginBottom:"8px"}},"😴"),
+      h("div",{style:{color:C.text,fontSize:"16px",fontWeight:"700"}},"No Games Today")
+    ));
+  } else {
+    const list = h("div",{style:{display:"flex",flexDirection:"column",gap:"8px"}});
+    S.scResults.forEach(game => {
+      const hasDrafted = draftedAbbrs.has(game.awayAbbr) || draftedAbbrs.has(game.homeAbbr);
+      const isFinal = ["Final","Game Over","Completed Early","Completed"].some(s => game.status?.includes(s));
+      const isLive = ["In Progress","Warmup","Pre-Game"].some(s => game.status?.includes(s)) || game.status === "Live";
+      const statusColor = isFinal ? C.muted : isLive ? C.green : C.muted;
+      const card = h("div",{style:{
+        background: C.card,
+        border: `1px solid ${hasDrafted ? C.accent+"55" : C.border}`,
+        borderRadius:"10px",
+        padding:"12px 16px",
+        boxShadow: hasDrafted ? `0 0 12px ${C.accent}15` : "none"
+      }});
+
+      const top = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}});
+      // Star + status
+      const statusEl = h("div",{style:{display:"flex",alignItems:"center",gap:"6px"}});
+      if(hasDrafted) statusEl.appendChild(h("span",{style:{fontSize:"14px"}},"🌟"));
+      statusEl.appendChild(h("span",{style:{color:statusColor,fontSize:"11px",fontWeight:"700",textTransform:"uppercase"}},
+        isLive ? `🔴 ${game.inning || game.status}` : game.status
+      ));
+      if(isFinal) statusEl.appendChild(h("span",{style:{color:C.muted,fontSize:"10px",marginLeft:"6px"}},"· refresh stats in 1-2 hrs"));
+      top.appendChild(statusEl);
+      // Game time if not started
+      if(!isFinal && !isLive && game.gameTime) {
+        top.appendChild(h("span",{style:{color:C.muted,fontSize:"11px"}},game.gameTime));
+      }
+      card.appendChild(top);
+
+      // Teams + scores
+      const matchup = h("div",{style:{display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",gap:"8px"}});
+
+      // Away team
+      const awayHasDrafted = draftedAbbrs.has(game.awayAbbr);
+      const awayEl = h("div",{style:{textAlign:"left"}});
+      awayEl.appendChild(h("div",{style:{color:awayHasDrafted?C.accent:C.text,fontWeight:awayHasDrafted?"800":"600",fontSize:"16px"}},game.awayAbbr));
+      awayEl.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",marginTop:"2px"}},game.awayName));
+      matchup.appendChild(awayEl);
+
+      // Score or vs
+      const scoreEl = h("div",{style:{textAlign:"center"}});
+      if(isFinal || isLive) {
+        scoreEl.appendChild(h("div",{style:{color:C.text,fontFamily:"'Bebas Neue', sans-serif",fontSize:"24px",fontWeight:"800",lineHeight:"1"}},
+          `${game.awayScore} - ${game.homeScore}`
+        ));
+      } else {
+        scoreEl.appendChild(h("div",{style:{color:C.muted,fontSize:"16px",fontWeight:"700"}},"vs"));
+      }
+      matchup.appendChild(scoreEl);
+
+      // Home team
+      const homeHasDrafted = draftedAbbrs.has(game.homeAbbr);
+      const homeEl = h("div",{style:{textAlign:"right"}});
+      homeEl.appendChild(h("div",{style:{color:homeHasDrafted?C.accent:C.text,fontWeight:homeHasDrafted?"800":"600",fontSize:"16px"}},game.homeAbbr));
+      homeEl.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",marginTop:"2px"}},game.homeName));
+      matchup.appendChild(homeEl);
+      card.appendChild(matchup);
+
+      // Show which drafted players are in this game
+      if(hasDrafted) {
+        const draftedInGame = [];
+        S.teams.forEach(ft => {
+          const hcTeam = HARDCODED_TEAMS.find(hc => hc.id === ft.id);
+          (ft.players||[]).forEach((p,i) => {
+            const abbr = p.teamAbbr || hcTeam?.players?.[i]?.teamAbbr || null;
+            if(abbr === game.awayAbbr || abbr === game.homeAbbr) {
+              draftedInGame.push(`${p.name} (${ft.name})`);
+            }
+          });
+        });
+        if(draftedInGame.length > 0) {
+          card.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",marginTop:"8px",paddingTop:"8px",borderTop:`1px solid ${C.border}33`}},
+            draftedInGame.join(" · ")
+          ));
+        }
+      }
+      list.appendChild(card);
+    });
+    wrap.appendChild(list);
+  }
+
+  wrap.appendChild(h("button",{style:{width:"100%",marginTop:"16px",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"13px"},onClick:loadScores},"⟳ Refresh Scores"));
+  return wrap;
+}
+
+async function loadScores() {
+  set({scLoading:true,scDone:false,scResults:null});
+  try {
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const r = await fetch(`https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${today}&hydrate=linescore,team`);
+    if(!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    const games = d.dates?.[0]?.games || [];
+    console.log("Scores API sample game:", JSON.stringify(games[0], null, 2).slice(0, 800));
+
+    // Hardcoded MLB team ID → abbreviation (these never change)
+    const TEAM_ABBR = {
+      108:"LAA",109:"ARI",110:"BAL",111:"BOS",112:"CHC",113:"CIN",114:"CLE",
+      115:"COL",116:"DET",117:"HOU",118:"KC",119:"LAD",120:"WSH",121:"NYM",
+      133:"ATH",134:"PIT",135:"SD",136:"SEA",137:"SF",138:"STL",139:"TB",
+      140:"TEX",141:"TOR",142:"MIN",143:"PHI",144:"ATL",145:"CWS",146:"MIA",
+      147:"NYY",158:"MIL"
+    };
+    const TEAM_NAME = {
+      108:"Angels",109:"D-backs",110:"Orioles",111:"Red Sox",112:"Cubs",
+      113:"Reds",114:"Guardians",115:"Rockies",116:"Tigers",117:"Astros",
+      118:"Royals",119:"Dodgers",120:"Nationals",121:"Mets",133:"Athletics",
+      134:"Pirates",135:"Padres",136:"Mariners",137:"Giants",138:"Cardinals",
+      139:"Rays",140:"Rangers",141:"Blue Jays",142:"Twins",143:"Phillies",
+      144:"Braves",145:"White Sox",146:"Marlins",147:"Yankees",158:"Brewers"
+    };
+
+    const results = games.map(g => {
+      const awayId = g.teams?.away?.team?.id;
+      const homeId = g.teams?.home?.team?.id;
+      const linescore = g.linescore;
+      return {
+        awayAbbr: TEAM_ABBR[awayId] || g.teams?.away?.team?.abbreviation || "?",
+        awayName: TEAM_NAME[awayId] || g.teams?.away?.team?.teamName || "",
+        awayScore: linescore?.teams?.away?.runs ?? g.teams?.away?.score ?? "-",
+        homeAbbr: TEAM_ABBR[homeId] || g.teams?.home?.team?.abbreviation || "?",
+        homeName: TEAM_NAME[homeId] || g.teams?.home?.team?.teamName || "",
+        homeScore: linescore?.teams?.home?.runs ?? g.teams?.home?.score ?? "-",
+        status: g.status?.detailedState || g.status?.abstractGameState || "Scheduled",
+        inning: linescore?.currentInningOrdinal || null,
+        gameTime: g.gameDate ? new Date(g.gameDate).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}) : null,
+      };
+    });
+    set({scLoading:false,scDone:true,scResults:results});
+  } catch(e) {
+    set({scLoading:false,scDone:true,scResults:[]});
+  }
+}
+
+// ── Weekly Recap ──────────────────────────────────────────────────────────────
 function buildHistory() {
   // Trigger load if not yet loaded
   if(S.historyWeeks === null && !S.historyLoading) loadHistory();
