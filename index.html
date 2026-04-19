@@ -51,7 +51,7 @@ const db = getFirestore(firebaseApp);
 const leagueRef = doc(db, "league", "data");
 const historyCol = collection(db, "history");
 
-// Save a weekly snapshot — called automatically on Mondays & manually by commish
+// Save a weekly snapshot - called automatically on Mondays & manually by commish
 async function saveHistorySnapshot(label) {
   try {
     const now = new Date();
@@ -84,7 +84,7 @@ async function loadHistory() {
   }
 }
 
-// Auto-snapshot every Monday — checks once on load
+// Auto-snapshot every Monday - checks once on load
 function maybeAutoSnapshot() {
   const now = new Date();
   if(now.getDay() !== 1) return; // only on Monday
@@ -196,10 +196,10 @@ function score(team) {
 }
 function teamHR(team) { return (team.players||[]).filter(p=>p.type==="hr").reduce((s,p)=>s+(p.effectiveHR||0),0); }
 function teamHBP(team){ return (team.players||[]).filter(p=>p.type==="hbp").reduce((s,p)=>s+(p.effectiveHBP||0),0); }
-function fmtDate(iso){ if(!iso)return"—"; return new Date(iso).toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
+function fmtDate(iso){ if(!iso)return"-"; return new Date(iso).toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
 function fmtTime(iso){ if(!iso)return""; return new Date(iso).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
 
-// Hardcoded MLB IDs for all drafted players — bypasses name search entirely
+// Hardcoded MLB IDs for all drafted players - bypasses name search entirely
 const PLAYER_IDS = {
   // Austin - Vinnie Bombinos
   "Shohei Ohtani":       660271,
@@ -423,7 +423,7 @@ async function saveToFirebase(teams) {
 
 // ── MLB Stats refresh ─────────────────────────────────────────────────────────
 async function refreshAllStats() {
-  set({ refreshing: true, refreshStatus: "Fetching stats…" });
+  set({ refreshing: true, refreshStatus: "Fetching stats..." });
   const updated = JSON.parse(JSON.stringify(S.teams));
   for(const t of updated) {
     for(const p of t.players) {
@@ -441,7 +441,7 @@ async function refreshAllStats() {
     }
   }
   await saveToFirebase(updated);
-  set({ refreshing: false, refreshStatus: "✓ Updated!" });
+  set({ refreshing: false, refreshStatus: "OK Updated!" });
   setTimeout(()=>set({refreshStatus:""}), 3000);
 }
 
@@ -467,7 +467,7 @@ function badge(label, color) {
   return h("span",{style:{background:color+"22",color,border:`1px solid ${color}44`,borderRadius:"4px",padding:"2px 7px",fontSize:"11px",fontWeight:"700",letterSpacing:"0.05em",textTransform:"uppercase"}},label);
 }
 
-function spinner(msg="Loading…") {
+function spinner(msg="Loading...") {
   const wrap = h("div",{style:{display:"flex",alignItems:"center",gap:"8px",color:C.muted,fontSize:"13px"}});
   const spin = h("div",{style:{width:"14px",height:"14px",border:`2px solid ${C.border}`,borderTopColor:C.accent,borderRadius:"50%",animation:"spin 0.8s linear infinite"}});
   wrap.append(spin, msg);
@@ -613,7 +613,7 @@ function buildLeaderboard() {
   ));
 
   if(list.length===0) {
-    wrap.appendChild(h("div",{style:{textAlign:"center",padding:"40px",color:C.muted,fontSize:"13px"}},"No data yet — refresh stats to load."));
+    wrap.appendChild(h("div",{style:{textAlign:"center",padding:"40px",color:C.muted,fontSize:"13px"}},"No data yet - refresh stats to load."));
     return wrap;
   }
 
@@ -678,7 +678,7 @@ function buildRecent() {
       wrap.appendChild(center);
       return wrap;
     }
-    if(S.ydLoading) { wrap.appendChild(h("div",{style:{display:"flex",justifyContent:"center",padding:"32px 0"}},spinner("Checking all players…"))); return wrap; }
+    if(S.ydLoading) { wrap.appendChild(h("div",{style:{display:"flex",justifyContent:"center",padding:"32px 0"}},spinner("Checking all players..."))); return wrap; }
     if(S.ydDone) {
       if(!S.ydResults||S.ydResults.length===0) {
         wrap.appendChild(h("div",{style:{textAlign:"center",padding:"32px 20px"}},
@@ -702,7 +702,7 @@ function buildRecent() {
         });
         wrap.appendChild(list);
       }
-      wrap.appendChild(h("button",{style:{width:"100%",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"13px"},onClick:loadYesterday},"⟳ Refresh"));
+      wrap.appendChild(h("button",{style:{width:"100%",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"13px"},onClick:loadYesterday},"Refresh Refresh"));
     }
     return wrap;
   }
@@ -722,7 +722,7 @@ function buildRecent() {
     wrap.appendChild(h("button",{style:{padding:"12px 28px",borderRadius:"8px",cursor:"pointer",background:C.accent,border:"none",color:"#000",fontWeight:"700",fontSize:"14px"},onClick:()=>loadWeeklyRecap(fmtISO(lastMon),fmtISO(lastSun))},"Load This Week's Recap"));
     return wrap;
   }
-  if(S.wkLoading) { wrap.appendChild(spinner("Crunching this week's stats…")); return wrap; }
+  if(S.wkLoading) { wrap.appendChild(spinner("Crunching this week's stats...")); return wrap; }
   if(!S.wkResults) {
     wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"13px",textAlign:"center",padding:"30px"}},"No data available for this week."));
     return wrap;
@@ -741,9 +741,9 @@ function buildRecent() {
     c.appendChild(h("div",{style:{color:C.muted,fontSize:"10px",marginTop:"2px"}},label));
     return c;
   };
-  heroes.appendChild(heroCard("🏆","Team of Week",teamOfWeek?.name||"—",teamOfWeek?.pts??0,"pts",C.accent));
-  heroes.appendChild(heroCard("💣","Top HR",topHR?.name||"—",topHR?.val??0,"HR",C.red));
-  heroes.appendChild(heroCard("🤕","Top HBP",topHBP?.name||"—",topHBP?.val??0,"HBP",C.green));
+  heroes.appendChild(heroCard("🏆","Team of Week",teamOfWeek?.name||"-",teamOfWeek?.pts??0,"pts",C.accent));
+  heroes.appendChild(heroCard("💣","Top HR",topHR?.name||"-",topHR?.val??0,"HR",C.red));
+  heroes.appendChild(heroCard("🤕","Top HBP",topHBP?.name||"-",topHBP?.val??0,"HBP",C.green));
   wrap.appendChild(heroes);
 
   // Team breakdown
@@ -784,7 +784,7 @@ function buildRecent() {
     plist.appendChild(row);
   });
   wrap.appendChild(plist);
-  wrap.appendChild(h("button",{style:{width:"100%",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"13px"},onClick:()=>loadWeeklyRecap(fmtISO(lastMon),fmtISO(lastSun))},"⟳ Refresh"));
+  wrap.appendChild(h("button",{style:{width:"100%",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"13px"},onClick:()=>loadWeeklyRecap(fmtISO(lastMon),fmtISO(lastSun))},"Refresh Refresh"));
   return wrap;
 }
 
@@ -809,7 +809,7 @@ function buildUpToBat() {
   const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
   wrap.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"6px"}},
     h("span",{style:{fontSize:"20px"}},"⚾"),
-    h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Up to Bat — Today's Schedule")
+    h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Up to Bat - Today's Schedule")
   ));
   wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"13px",marginBottom:"20px"}},"Shows drafted players who played today and their HR/HBP stats. Load after games start for best results."));
 
@@ -817,7 +817,7 @@ function buildUpToBat() {
     wrap.appendChild(h("button",{style:{padding:"12px 28px",borderRadius:"8px",cursor:"pointer",background:C.accent,border:"none",color:"#000",fontWeight:"700",fontSize:"14px"},onClick:loadUpToBat},"Load Today's Schedule"));
     return wrap;
   }
-  if(S.utbLoading) { wrap.appendChild(spinner("Loading today's schedule…")); return wrap; }
+  if(S.utbLoading) { wrap.appendChild(spinner("Loading today's schedule...")); return wrap; }
 
   if(!S.utbResults || S.utbResults.length === 0) {
     wrap.appendChild(h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",padding:"28px",textAlign:"center"}},
@@ -860,7 +860,7 @@ function buildUpToBat() {
       wrap.appendChild(card);
     });
   }
-  wrap.appendChild(h("button",{style:{width:"100%",marginTop:"16px",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"13px"},onClick:loadUpToBat},"⟳ Refresh"));
+  wrap.appendChild(h("button",{style:{width:"100%",marginTop:"16px",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"13px"},onClick:loadUpToBat},"Refresh Refresh"));
   return wrap;
 }
 
@@ -910,7 +910,7 @@ async function loadUpToBat() {
 
 // ── Projected Rankings ────────────────────────────────────────────────────────
 
-// Preseason projections (Steamer 2026) — HR for HR players, HBP for HBP players
+// Preseason projections (Steamer 2026) - HR for HR players, HBP for HBP players
 const PRESEASON_PROJ = {
   // Austin - Vinnie Bombinos
   "Shohei Ohtani":       46, "Bobby Witt Jr.":      29, "Riley Greene":        29,
@@ -975,7 +975,7 @@ function buildProjected() {
       const actual = p.type==="hr" ? (p.effectiveHR||0) : (p.effectiveHBP||0);
 
       if(preseason === null) {
-        // No preseason data — fall back to pure pace
+        // No preseason data - fall back to pure pace
         const rate = actual / Math.max(gamesPlayed, 1);
         projectedScore += rate * gamesRemaining;
       } else {
@@ -996,7 +996,7 @@ function buildProjected() {
 
   const sorted = [...projTeams].sort((a,b)=>b.projectedScore-a.projectedScore);
   if(sorted.length === 0) {
-    wrap.appendChild(h("div",{style:{textAlign:"center",padding:"40px",color:C.muted,fontSize:"13px"}},"Loading…"));
+    wrap.appendChild(h("div",{style:{textAlign:"center",padding:"40px",color:C.muted,fontSize:"13px"}},"Loading..."));
     return wrap;
   }
   const maxProj = Math.max(...sorted.map(t=>t.projectedScore),1);
@@ -1108,13 +1108,13 @@ function buildHot() {
     },"Load Last 7 Days"));
   } else if(S.hotL7Loading) {
     wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",textAlign:"center",marginBottom:"16px",padding:"12px",background:C.card,borderRadius:"8px",border:`1px solid ${C.border}`}},
-      "⏳ Fetching last 7 days for all 64 players… this takes ~30 seconds"
+      "⏳ Fetching last 7 days for all 64 players... this takes ~30 seconds"
     ));
   } else {
     wrap.appendChild(h("button",{
       style:{width:"100%",padding:"8px",borderRadius:"8px",cursor:"pointer",background:"transparent",border:`1px solid ${C.border}`,color:C.muted,fontSize:"12px",marginBottom:"16px"},
       onClick:loadHotL7
-    },"⟳ Refresh Last 7 Days"));
+    },"Refresh Refresh Last 7 Days"));
   }
 
   const l7 = S.hotL7 || {};
@@ -1145,7 +1145,7 @@ function buildHot() {
       const l7val = S.hotL7Done ? (l7[p.name] ?? null) : null;
 
       // Heat based on L7 if available, else season pace
-      let heatLabel = "—", heatColor = C.muted, diff = null;
+      let heatLabel = "-", heatColor = C.muted, diff = null;
       if(preseason && preseason > 0) {
         // Use L7 pace if loaded, else fall back to season pace
         const compareVal = l7val !== null
@@ -1182,7 +1182,7 @@ function buildHot() {
       const l7Color = l7val===null ? C.muted : l7val>0 ? (isHBP?C.green:C.red) : C.muted;
       row.appendChild(h("div",{style:{textAlign:"right",minWidth:"28px",flexShrink:0}},
         h("div",{style:{color:l7Color,fontFamily:"'Bebas Neue', sans-serif",fontSize:"20px",fontWeight:"800",lineHeight:"1"}},
-          l7val !== null ? l7val : "—"
+          l7val !== null ? l7val : "-"
         )
       ));
 
@@ -1192,8 +1192,8 @@ function buildHot() {
       row.appendChild(h("div",{style:{textAlign:"right",minWidth:"60px",flexShrink:0}},
         h("div",{style:{color:heatColor,fontFamily:"'Bebas Neue', sans-serif",fontSize:"20px",fontWeight:"800",lineHeight:"1"}},seasonPace),
         preseason !== null
-          ? h("div",{style:{color:diffColor,fontSize:"10px",fontWeight:"700"}},diffStr===""?"—":diffStr)
-          : h("div",{style:{color:C.muted,fontSize:"10px"}},"—")
+          ? h("div",{style:{color:diffColor,fontSize:"10px",fontWeight:"700"}},diffStr===""?"-":diffStr)
+          : h("div",{style:{color:C.muted,fontSize:"10px"}},"-")
       ));
 
       card.appendChild(row);
@@ -1234,7 +1234,7 @@ function buildScores() {
     wrap.appendChild(h("button",{style:{padding:"12px 28px",borderRadius:"8px",cursor:"pointer",background:C.accent,border:"none",color:"#000",fontWeight:"700",fontSize:"14px"},onClick:loadScores},"Load Today's Scores"));
     return wrap;
   }
-  if(S.scLoading) { wrap.appendChild(spinner("Loading scores…")); return wrap; }
+  if(S.scLoading) { wrap.appendChild(spinner("Loading scores...")); return wrap; }
   if(!S.scResults || S.scResults.length === 0) {
     wrap.appendChild(h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",padding:"28px",textAlign:"center"}},
       h("div",{style:{fontSize:"32px",marginBottom:"8px"}},"😴"),
@@ -1333,7 +1333,7 @@ function buildScores() {
     wrap.appendChild(list);
   }
 
-  wrap.appendChild(h("button",{style:{width:"100%",marginTop:"16px",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"13px"},onClick:loadScores},"⟳ Refresh Scores"));
+  wrap.appendChild(h("button",{style:{width:"100%",marginTop:"16px",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"13px"},onClick:loadScores},"Refresh Refresh Scores"));
   return wrap;
 }
 
@@ -1443,7 +1443,7 @@ function buildHistory() {
   ));
   wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"20px"}},"Weekly standings snapshots · Saved automatically every Monday"));
 
-  if(S.historyLoading) { wrap.appendChild(spinner("Loading history…")); return wrap; }
+  if(S.historyLoading) { wrap.appendChild(spinner("Loading history...")); return wrap; }
 
   if(!S.historyWeeks || S.historyWeeks.length === 0) {
     wrap.appendChild(h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",padding:"32px",textAlign:"center"}},
@@ -1452,11 +1452,11 @@ function buildHistory() {
       h("div",{style:{color:C.muted,fontSize:"13px",marginBottom:"20px"}},"History saves automatically every Monday. You can also save a snapshot now."),
       S.commishUnlocked ? h("button",{style:{padding:"10px 24px",borderRadius:"8px",cursor:"pointer",background:C.accent,border:"none",color:"#000",fontWeight:"700",fontSize:"13px"},onClick:async(e)=>{
         const btn = e.target;
-        btn.textContent = "Saving…";
+        btn.textContent = "Saving...";
         btn.disabled = true;
         const ok = await saveHistorySnapshot(`Week of ${new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})}`);
         if(ok) { btn.textContent = "✅ Saved!"; loadHistory(); }
-        else { btn.textContent = "❌ Failed — check Firebase rules"; btn.disabled = false; }
+        else { btn.textContent = "❌ Failed - check Firebase rules"; btn.disabled = false; }
       }},"💾 Save Snapshot Now") : h("div",{style:{color:C.muted,fontSize:"12px"}},"Enter commissioner PIN to save a snapshot manually")
     ));
     return wrap;
@@ -1483,10 +1483,10 @@ function buildHistory() {
     const prevRank = prev ? prev.standings.findIndex(t=>t.id===team.id) : -1;
     const movement = prev && prevRank !== -1 ? prevRank - i : null; // positive = moved up
     let movEl;
-    if(movement === null) movEl = h("span",{style:{color:C.muted,fontSize:"12px"}},"—");
+    if(movement === null) movEl = h("span",{style:{color:C.muted,fontSize:"12px"}},"-");
     else if(movement > 0) movEl = h("span",{style:{color:"#4caf50",fontSize:"12px",fontWeight:"700"}},`↑${movement}`);
     else if(movement < 0) movEl = h("span",{style:{color:"#6ab0ff",fontSize:"12px",fontWeight:"700"}},`↓${Math.abs(movement)}`);
-    else movEl = h("span",{style:{color:C.muted,fontSize:"12px"}},"—");
+    else movEl = h("span",{style:{color:C.muted,fontSize:"12px"}},"-");
 
     const isFirst = i === 0;
     const isLast = i === current.standings.length - 1;
@@ -1527,11 +1527,11 @@ function buildHistory() {
       style:{width:"100%",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"13px"},
       onClick:async(e)=>{
         const btn = e.target;
-        btn.textContent = "Saving…";
+        btn.textContent = "Saving...";
         btn.disabled = true;
         const ok = await saveHistorySnapshot(`Week of ${new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})}`);
         if(ok) { btn.textContent = "✅ Saved!"; loadHistory(); }
-        else { btn.textContent = "❌ Failed — check Firebase rules"; btn.style.color = C.red; btn.disabled = false; }
+        else { btn.textContent = "❌ Failed - check Firebase rules"; btn.style.color = C.red; btn.disabled = false; }
       }
     },"💾 Save Snapshot Now"));
   }
@@ -1584,7 +1584,7 @@ function buildRules() {
   };
 
   wrap.appendChild(section("📋","Format",[
-    {num:"1", text:"Draft 8 players — no bench, no active roster management. You live with injury and suspension luck."},
+    {num:"1", text:"Draft 8 players - no bench, no active roster management. You live with injury and suspension luck."},
     {num:"2", text:"1 of your 8 picks is designated as your HBP player. Their HRs do not count toward your team total."},
     {num:"3", text:"Scoring: Home Runs + Hit By Pitches = Total Points."},
   ]));
@@ -1599,7 +1599,7 @@ function buildRules() {
     {num:"🥇", text:"League splits the cost of a MLB jersey for the winner. Winner gets a jersey of a player from their fantasy team with a custom patch."},
   ]));
 
-  wrap.appendChild(section("💀","Punishment — 2nd & Last Place",[
+  wrap.appendChild(section("💀","Punishment - 2nd & Last Place",[
     {num:"⚠️", text:"TBD..."},
   ]));
 
@@ -1618,9 +1618,9 @@ function buildDebug() {
     h("span",{style:{fontSize:"20px"}},"🔍"),
     h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"API Debug")
   ));
-  wrap.appendChild(h("p",{style:{color:C.muted,fontSize:"13px",marginBottom:"16px"}},"Tests every player against the MLB API — useful for spotting name mismatches or missing stats."));
+  wrap.appendChild(h("p",{style:{color:C.muted,fontSize:"13px",marginBottom:"16px"}},"Tests every player against the MLB API - useful for spotting name mismatches or missing stats."));
   if(!S.dbRunning) wrap.appendChild(h("button",{style:{padding:"11px 24px",borderRadius:"8px",cursor:"pointer",background:C.accent,border:"none",color:"#000",fontWeight:"700",fontSize:"14px",marginBottom:"20px"},onClick:runDebug},"🔍 Run API Check"));
-  if(S.dbRunning) wrap.appendChild(h("div",{style:{marginBottom:"16px"}},spinner(`Checking ${S.dbResults.length} of 64 players…`)));
+  if(S.dbRunning) wrap.appendChild(h("div",{style:{marginBottom:"16px"}},spinner(`Checking ${S.dbResults.length} of 64 players...`)));
   if(S.dbResults.length>0) {
     const list = h("div",{style:{display:"flex",flexDirection:"column",gap:"6px"}});
     S.dbResults.forEach(r=>{
@@ -1653,7 +1653,7 @@ function buildDebug() {
     const err=S.dbResults.filter(r=>r.status.startsWith("❌")).length;
     wrap.appendChild(h("div",{style:{marginTop:"16px"}},
       h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"12px"}},`✅ ${ok} ok · ⚠️ ${warn} no stats · ❌ ${err} not found`),
-      h("button",{style:{padding:"8px 18px",borderRadius:"7px",cursor:"pointer",background:"transparent",border:`1px solid ${C.border}`,color:C.muted,fontSize:"13px"},onClick:runDebug},"⟳ Run Again")
+      h("button",{style:{padding:"8px 18px",borderRadius:"7px",cursor:"pointer",background:"transparent",border:`1px solid ${C.border}`,color:C.muted,fontSize:"13px"},onClick:runDebug},"Refresh Run Again")
     ));
   }
   return wrap;
@@ -1813,7 +1813,7 @@ function buildSpotlightModal() {
   ));
 
   if(spotlightLoading) {
-    modal.appendChild(spinner("Loading player stats…"));
+    modal.appendChild(spinner("Loading player stats..."));
   } else if(!sd) {
     modal.appendChild(h("div",{style:{color:C.muted,fontSize:"13px",textAlign:"center",padding:"20px"}},"Stats unavailable for this player."));
   } else {
@@ -1900,7 +1900,7 @@ function buildProjectedTeamModal() {
     const projRounded = Math.round(projFinal);
     const diff = preseason !== null ? projRounded - preseason : null;
     // Heat based on season pace vs preseason
-    let heat = "—";
+    let heat = "-";
     if(preseason && preseason > 0) {
       const seasonPace = Math.round((actual / Math.max(gamesPlayed,1)) * TOTAL_GAMES);
       const pct = (seasonPace - preseason) / preseason;
@@ -1968,7 +1968,7 @@ function buildProjectedTeamModal() {
         diffEl.appendChild(h("div",{style:{color:diffColor,fontSize:"12px",fontWeight:"800",lineHeight:"1"}},diffStr));
         diffEl.appendChild(h("div",{style:{color:C.muted,fontSize:"8px",textTransform:"uppercase"}},"vs pre"));
       } else {
-        diffEl.appendChild(h("div",{style:{color:C.muted,fontSize:"11px"}},"—"));
+        diffEl.appendChild(h("div",{style:{color:C.muted,fontSize:"11px"}},"-"));
       }
       row.appendChild(diffEl);
       list.appendChild(row);
@@ -2030,7 +2030,7 @@ function buildTeamModal(team) {
     sd.appendChild(h("span",{style:{color:C.green,fontWeight:"800",fontSize:"20px",fontFamily:"'Bebas Neue', sans-serif",minWidth:"28px",textAlign:"right"}},hbpPlayer.effectiveHBP||0));
     row.append(nd,sd); hs.appendChild(row); modal.appendChild(hs);
   }
-  if(team.hasUsedTransaction) modal.appendChild(h("div",{style:{padding:"10px 14px",background:`${C.accent}11`,border:`1px solid ${C.accent}33`,borderRadius:"8px",fontSize:"12px",color:C.muted,marginBottom:"16px"}},"⚡ Transaction used — roster locked"));
+  if(team.hasUsedTransaction) modal.appendChild(h("div",{style:{padding:"10px 14px",background:`${C.accent}11`,border:`1px solid ${C.accent}33`,borderRadius:"8px",fontSize:"12px",color:C.muted,marginBottom:"16px"}},"⚡ Transaction used - roster locked"));
   modal.appendChild(h("button",{style:{width:"100%",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"14px"},onClick:()=>set({selectedTeam:null})},"Close"));
   overlay.appendChild(modal);
   return overlay;
@@ -2112,13 +2112,13 @@ function buildCommish() {
   if(S.cpStatus) panel.appendChild(h("div",{style:{color:C.green,fontSize:"13px",marginBottom:"12px"}},S.cpStatus));
   const actions=h("div",{style:{display:"flex",gap:"10px",flexWrap:"wrap",alignItems:"center"}});
   actions.appendChild(h("button",{style:{padding:"10px 18px",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"13px",background:`${C.accent}22`,border:`1px solid ${C.accent}55`,color:C.accent,opacity:S.cpRefreshing?"0.6":"1"},onClick:async()=>{
-    set({cpRefreshing:true,cpStatus:"Fetching live MLB stats…"});
+    set({cpRefreshing:true,cpStatus:"Fetching live MLB stats..."});
     const updated=JSON.parse(JSON.stringify(local));
     for(const t of updated){for(const p of t.players){if(!p.name?.trim())continue;const s=await fetchStats(p.name);if(!s)continue;if(p.type==="hr"&&!p.droppedAt){if(p.addedAt){if(p.hrBaseline===null)p.hrBaseline=s.hr;p.effectiveHR=Math.max(0,s.hr-p.hrBaseline);}else p.effectiveHR=s.hr;}if(p.type==="hbp"&&!p.droppedAt){if(p.addedAt){if(p.hbpBaseline===null)p.hbpBaseline=s.hbp;p.effectiveHBP=Math.max(0,s.hbp-p.hbpBaseline);}else p.effectiveHBP=s.hbp;}if(s.teamAbbr)p.teamAbbr=s.teamAbbr;}}
-    set({cpLocal:updated,cpRefreshing:false,cpStatus:"✓ Stats updated!"});
+    set({cpLocal:updated,cpRefreshing:false,cpStatus:"OK Stats updated!"});
     setTimeout(()=>set({cpStatus:""}),3000);
-  }},S.cpRefreshing?"⟳ Refreshing…":"⟳ Refresh Live Stats"));
-  actions.appendChild(h("button",{style:{padding:"10px 18px",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"13px",background:C.accent,border:"none",color:"#000"},onClick:async()=>{await saveToFirebase(local);set({cpStatus:"✓ Saved!"});setTimeout(()=>set({cpStatus:""}),2000);}},  "💾 Save"));
+  }},S.cpRefreshing?"Refresh Refreshing...":"Refresh Refresh Live Stats"));
+  actions.appendChild(h("button",{style:{padding:"10px 18px",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"13px",background:C.accent,border:"none",color:"#000"},onClick:async()=>{await saveToFirebase(local);set({cpStatus:"OK Saved!"});setTimeout(()=>set({cpStatus:""}),2000);}},  "💾 Save"));
   panel.appendChild(actions);
   overlay.appendChild(panel);
   return overlay;
@@ -2135,7 +2135,7 @@ function render() {
   const titleBlock=h("div",{},
     h("div",{style:{fontFamily:"'Bebas Neue', sans-serif",fontSize:"38px",letterSpacing:"0.05em",color:C.accent,lineHeight:"1"}},"⚾ DINGERS ONLY"),
     h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginTop:"10px"}},
-      h("button",{style:{padding:"6px 14px",borderRadius:"6px",cursor:"pointer",fontWeight:"700",fontSize:"12px",background:`${C.accent}22`,border:`1px solid ${C.accent}55`,color:C.accent,opacity:S.refreshing?"0.6":"1"},onClick:refreshAllStats},S.refreshing?"⟳ Refreshing…":"⟳ Refresh Stats"),
+      h("button",{style:{padding:"6px 14px",borderRadius:"6px",cursor:"pointer",fontWeight:"700",fontSize:"12px",background:`${C.accent}22`,border:`1px solid ${C.accent}55`,color:C.accent,opacity:S.refreshing?"0.6":"1"},onClick:refreshAllStats},S.refreshing?"Refresh Refreshing...":"Refresh Refresh Stats"),
       S.refreshStatus?h("span",{style:{color:C.green,fontSize:"12px"}},S.refreshStatus):S.lastUpdated?h("span",{style:{color:C.muted,fontSize:"11px"}},`Updated ${fmtTime(S.lastUpdated)}`):null
     )
   );
@@ -2191,7 +2191,7 @@ function handleLogin() {
   else set({pwError:true});
 }
 
-render();
+try { render(); } catch(e) { console.error("Initial render error:", e); document.getElementById("app").innerHTML = `<div style="color:#f5c842;padding:20px;font-family:monospace;font-size:12px;background:#0a0f1e;min-height:100vh">Render error: ${e.message}<br><br><pre style="white-space:pre-wrap">${e.stack}</pre></div>`; }
 setInterval(() => { if(S.tab === "rules") render(); }, 60000);
 
 </script>
