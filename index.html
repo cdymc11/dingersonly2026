@@ -272,6 +272,15 @@ const PLAYER_IDS = {
   "CJ Abrams":           682928,
 };
 
+// MLB team ID → abbreviation (used for teamAbbr lookups)
+const MLB_TEAM_ABBR = {
+  108:"LAA",109:"ARI",110:"BAL",111:"BOS",112:"CHC",113:"CIN",114:"CLE",
+  115:"COL",116:"DET",117:"HOU",118:"KC",119:"LAD",120:"WSH",121:"NYM",
+  133:"ATH",134:"PIT",135:"SD",136:"SEA",137:"SF",138:"STL",139:"TB",
+  140:"TEX",141:"TOR",142:"MIN",143:"PHI",144:"ATL",145:"CWS",146:"MIA",
+  147:"NYY",158:"MIL"
+};
+
 async function fetchStats(name) {
   try {
     let playerId = PLAYER_IDS[name] || null;
@@ -286,16 +295,17 @@ async function fetchStats(name) {
     // Fetch stats and current team info in parallel
     const [r2, r3] = await Promise.all([
       fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=season&group=hitting&season=${season}&sportId=1`),
-      fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}?fields=people,currentTeam,abbreviation`)
+      fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}`)
     ]);
     if (!r2.ok) return { hr: 0, hbp: 0, playerId, teamAbbr: null };
     const d2 = await r2.json();
     const split = d2.stats?.[0]?.splits?.[0];
-    // Get team abbreviation: prefer stats split team, fall back to currentTeam
+    // Get team abbr: prefer stats split, fall back to currentTeam via ID lookup
     let teamAbbr = split?.team?.abbreviation ?? null;
     if (!teamAbbr && r3.ok) {
       const d3 = await r3.json();
-      teamAbbr = d3.people?.[0]?.currentTeam?.abbreviation ?? null;
+      const teamId = d3.people?.[0]?.currentTeam?.id ?? null;
+      if (teamId) teamAbbr = MLB_TEAM_ABBR[teamId] ?? null;
     }
     return { hr: split?.stat?.homeRuns??0, hbp: split?.stat?.hitByPitch??0, playerId, teamAbbr };
   } catch { return null; }
