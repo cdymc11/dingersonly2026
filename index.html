@@ -810,15 +810,9 @@ function buildProjected() {
 
   const sorted = [...projTeams].sort((a,b)=>b.projectedScore-a.projectedScore);
   const maxProj = Math.max(...sorted.map(t=>t.projectedScore),1);
-  const lastIdx = sorted.length - 1;
-
-  function rankIcon(i) {
-    if(i===0) return "🥇";
-    if(i===1) return "💀";
-    if(i===lastIdx) return "💀";
-    return `#${i+1}`;
-  }
-  function rankSize(i) { return (i===0||i===1||i===lastIdx)?"20px":"14px"; }
+  const projRankInfo = buildRankInfo(sorted.map(t=>t.projectedScore));
+  function rankIcon(i) { return projRankInfo[i].icon; }
+  function rankSize(i) { return projRankInfo[i].isSpecial ? "20px" : "14px"; }
 
   // Season progress bar
   const progressPct = Math.round((gamesPlayed/TOTAL_GAMES)*100);
@@ -835,7 +829,8 @@ function buildProjected() {
 
   sorted.forEach((team,i)=>{
     const pct = (team.projectedScore/maxProj)*100;
-    const card = h("div",{class:"row-hover",style:{background:C.card,border:`1px solid ${i===0?C.accent+"55":C.border}`,borderRadius:"12px",padding:"14px 18px",marginBottom:"10px",boxShadow:i===0?`0 0 20px ${C.accent}18`:"none",cursor:"pointer"},onClick:()=>set({projectedTeam:{team, gamesPlayed, gamesRemaining, paceWeight, projWeight}})});
+    const isFirst = projRankInfo[i].icon === "🥇";
+    const card = h("div",{class:"row-hover",style:{background:C.card,border:`1px solid ${isFirst?C.accent+"55":C.border}`,borderRadius:"12px",padding:"14px 18px",marginBottom:"10px",boxShadow:isFirst?`0 0 20px ${C.accent}18`:"none",cursor:"pointer"},onClick:()=>set({projectedTeam:{team, gamesPlayed, gamesRemaining, paceWeight, projWeight}})});
     const topRow = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}});
     topRow.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"10px"}},
       h("span",{style:{fontSize:rankSize(i),fontWeight:"700",color:C.muted,minWidth:"28px"}},rankIcon(i)),
