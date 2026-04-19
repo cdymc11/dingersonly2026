@@ -775,6 +775,42 @@ async function loadWeeklyRecap(startDate, endDate) {
 }
 
 // ── History ───────────────────────────────────────────────────────────────────
+// Preseason projections (Steamer 2026) — HR for HR players, HBP for HBP players
+const PRESEASON_PROJ = {
+  // Austin - Vinnie Bombinos
+  "Shohei Ohtani":       46, "Bobby Witt Jr.":      29, "Riley Greene":        29,
+  "Ketel Marte":         27, "Vinnie Pasquantino":  28, "Kazuma Okamoto":      24,
+  "Mike Trout":          26, "Heliot Ramos":        10,
+  // Jared - Only God Can Judge Me
+  "Aaron Judge":         44, "Brent Rooker":        35, "Fernando Tatis Jr.":  31,
+  "Kyle Tucker":         32, "Munetaka Murakami":   29, "Byron Buxton":        30,
+  "Taylor Ward":         27, "Pete Crow-Armstrong":  9,
+  // Shaun
+  "Matt Olson":          31, "Gunnar Henderson":    28, "Ronald Acuna Jr.":    31,
+  "Rafael Devers":       31, "Adolis Garcia":       27, "Christian Walker":    26,
+  "Jake Burger":         30, "Ty France":            8,
+  // Cody - Caglianone In A Million
+  "Kyle Schwarber":      43, "Eugenio Suarez":      36, "Yordan Alvarez":      30,
+  "Spencer Torkelson":   28, "Colson Montgomery":   27, "Daulton Varsho":      28,
+  "Jac Caglianone":      20, "Randy Arozarena":     20,
+  // Mark - Machado Man Randy Slamage
+  "Cal Raleigh":         40, "Junior Caminero":     39, "Jo Adell":            34,
+  "Bryce Harper":        29, "Hunter Goodman":      29, "Ben Rice":            27,
+  "Manny Machado":       27, "Zach Neto":           18,
+  // Doug - Doug's Dinger Dynasty
+  "Nick Kurtz":          36, "Vladimir Guerrero Jr.": 32, "Jose Ramirez":      29,
+  "Shea Langeliers":     29, "Jazz Chisholm Jr.":   29, "James Wood":          28,
+  "Wyatt Langford":      27, "Willson Contreras":   19,
+  // Brendan - Go, Diego, Go!
+  "Juan Soto":           37, "Pete Alonso":         37, "Julio Rodriguez":     32,
+  "Austin Riley":        30, "Michael Busch":       28, "Corey Seager":        27,
+  "Elly De La Cruz":     25, "Caleb Durbin":        18,
+  // Brexton & Diego
+  "Teoscar Hernandez":   28, "Max Muncy":           21, "Salvador Perez":      27,
+  "Freddie Freeman":     23, "Brandon Lowe":        23, "Seiya Suzuki":        24,
+  "Willy Adames":        26, "CJ Abrams":           13,
+};
+
 function buildProjected() {
   const TOTAL_GAMES = 162;
   const seasonStart = new Date("2026-03-26");
