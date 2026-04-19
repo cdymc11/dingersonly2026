@@ -1332,6 +1332,7 @@ function buildScores() {
             background:`${color}06`
           }});
           const nameEl = h("span",{style:{color:C.text,fontSize:"13px",fontWeight:"600",flex:"1"}},p.name);
+          if(p.teamAbbr) nameEl.appendChild(h("span",{style:{color:C.muted,fontWeight:"400",fontSize:"12px"}},` (${p.teamAbbr})`));
           row.appendChild(nameEl);
           row.appendChild(h("div",{style:{color:C.muted,fontSize:"11px"}},p.fantasyTeam));
           row.appendChild(badge(isHBP?"HBP":"HR",color));
@@ -1906,7 +1907,7 @@ function buildSpotlightModal() {
   // Header
   modal.appendChild(h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"20px"}},
     h("div",{},
-      h("div",{style:{color:C.text,fontWeight:"800",fontSize:"20px"}},sp.name),
+      h("div",{style:{color:C.text,fontWeight:"800",fontSize:"20px"}},sp.name,sp.teamAbbr?h("span",{style:{color:C.muted,fontWeight:"400",fontSize:"15px"}},` (${sp.teamAbbr})`):""),
       h("div",{style:{color:typeColor,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginTop:"2px"}},sp.type==="hr"?"HR Player":"HBP Player"),
       h("div",{style:{color:C.muted,fontSize:"12px",marginTop:"2px"}},sp.fantasyTeam)
     ),
