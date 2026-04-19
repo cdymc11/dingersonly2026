@@ -473,17 +473,52 @@ function playerName(p) {
   return wrap;
 }
 
+// ── Shared tie-aware ranking logic ────────────────────────────────────────────
+// Given a sorted array of scores (desc), returns per-index rank info
+function buildRankInfo(scores) {
+  const n = scores.length;
+  if(n === 0) return [];
+
+  // Find distinct score values in order
+  const distinct = [...new Set(scores)]; // highest to lowest
+  const firstScore = distinct[0];
+  const secondScore = distinct[1] ?? null;  // first losing position
+  const lastScore = distinct[distinct.length - 1];
+
+  // Assign true tied rank numbers (1-indexed)
+  // e.g. two teams tied at 28 both get rank 2, next team gets rank 4
+  const rankNums = scores.map((s, i) => {
+    // rank = number of teams strictly above this score + 1
+    return scores.filter(x => x > s).length + 1;
+  });
+
+  return scores.map((s, i) => {
+    const rank = rankNums[i];
+    const isFirst = s === firstScore;
+    const isSecondPos = secondScore !== null && s === secondScore;
+    const isLast = s === lastScore && s !== firstScore; // can't be both first and last unless everyone tied
+    // Special case: if only one distinct score, everyone ties for first
+    const allTied = distinct.length === 1;
+
+    let icon, isSpecial;
+    if(isFirst) {
+      icon = "🥇"; isSpecial = true;
+    } else if(isSecondPos || isLast) {
+      icon = "💀"; isSpecial = true;
+    } else {
+      icon = `#${rank}`; isSpecial = false;
+    }
+    return { rank, icon, isSpecial };
+  });
+}
+
 // ── Standings ─────────────────────────────────────────────────────────────────
 function buildStandings() {
   const sorted = [...S.teams].sort((a,b)=>score(b)-score(a));
-  const lastIdx = sorted.length - 1;
-  function rankIcon(i) {
-    if(i === 0) return "🥇";
-    if(i === 1) return "💀";
-    if(i === lastIdx) return "💀";
-    return `#${i+1}`;
-  }
-  function rankSize(i) { return (i===0||i===1||i===lastIdx) ? "20px" : "14px"; }
+  const scores = sorted.map(t=>score(t));
+  const rankInfo = buildRankInfo(scores);
+  function rankIcon(i) { return rankInfo[i].icon; }
+  function rankSize(i) { return rankInfo[i].isSpecial ? "20px" : "14px"; }
   const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
   const hdr = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"12px"}},
     h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Standings"),
@@ -500,7 +535,7 @@ function buildStandings() {
   sorted.forEach((team,i)=>{
     const teamScore = score(team);
     const pct = (teamScore/maxScore)*100;
-    const wrapper = h("div",{style:{borderBottom:i<sorted.length-1?`1px solid ${C.border}`:"none",background:i===0?`${C.accent}11`:"transparent",transition:"background 0.15s",cursor:"pointer"},onClick:()=>set({selectedTeam:team})});
+    const wrapper = h("div",{style:{borderBottom:i<sorted.length-1?`1px solid ${C.border}`:"none",background:rankInfo[i].icon==="🥇"?`${C.accent}11`:"transparent",transition:"background 0.15s",cursor:"pointer"},onClick:()=>set({selectedTeam:team})});
     wrapper.classList.add("row-hover");
     const row = h("div",{style:{display:"grid",gridTemplateColumns:"40px 1fr 60px",alignItems:"center",padding:"14px 20px 8px"}},
       h("span",{style:{fontSize:rankSize(i),color:C.muted,fontWeight:"700"}}, rankIcon(i)),
@@ -511,7 +546,7 @@ function buildStandings() {
       h("span",{style:{color:C.accent,fontWeight:"800",fontSize:"22px",textAlign:"right",fontFamily:"'Bebas Neue', sans-serif"}},teamScore)
     );
     const barWrap = h("div",{style:{margin:"0 20px 10px",height:"4px",background:C.bg,borderRadius:"2px",overflow:"hidden"}});
-    barWrap.appendChild(h("div",{style:{height:"100%",width:`${pct}%`,background:i===0?`linear-gradient(90deg,${C.accent},${C.red})`:`${C.accent}66`,borderRadius:"2px",transition:"width 0.6s ease"}}));
+    barWrap.appendChild(h("div",{style:{height:"100%",width:`${pct}%`,background:rankInfo[i].icon==="🥇"?`linear-gradient(90deg,${C.accent},${C.red})`:`${C.accent}66`,borderRadius:"2px",transition:"width 0.6s ease"}}));
     wrapper.append(row, barWrap);
     table.appendChild(wrapper);
   });
@@ -827,15 +862,10 @@ function buildProjected() {
 
   const sorted = [...projTeams].sort((a,b)=>b.projectedScore-a.projectedScore);
   const maxProj = Math.max(...sorted.map(t=>t.projectedScore),1);
-  const lastIdx = sorted.length - 1;
+  const projRankInfo = buildRankInfo(sorted.map(t=>t.projectedScore));
 
-  function rankIcon(i) {
-    if(i===0) return "🥇";
-    if(i===1) return "💀";
-    if(i===lastIdx) return "💀";
-    return `#${i+1}`;
-  }
-  function rankSize(i) { return (i===0||i===1||i===lastIdx)?"20px":"14px"; }
+  function rankIcon(i) { return projRankInfo[i].icon; }
+  function rankSize(i) { return projRankInfo[i].isSpecial ? "20px" : "14px"; }
 
   // Season progress bar
   const progressPct = Math.round((gamesPlayed/TOTAL_GAMES)*100);
@@ -852,7 +882,8 @@ function buildProjected() {
 
   sorted.forEach((team,i)=>{
     const pct = (team.projectedScore/maxProj)*100;
-    const card = h("div",{class:"row-hover",style:{background:C.card,border:`1px solid ${i===0?C.accent+"55":C.border}`,borderRadius:"12px",padding:"14px 18px",marginBottom:"10px",boxShadow:i===0?`0 0 20px ${C.accent}18`:"none",cursor:"pointer"},onClick:()=>set({projectedTeam:{team, gamesPlayed, gamesRemaining, paceWeight, projWeight}})});
+    const isFirst = projRankInfo[i].icon === "🥇";
+    const card = h("div",{class:"row-hover",style:{background:C.card,border:`1px solid ${isFirst?C.accent+"55":C.border}`,borderRadius:"12px",padding:"14px 18px",marginBottom:"10px",boxShadow:isFirst?`0 0 20px ${C.accent}18`:"none",cursor:"pointer"},onClick:()=>set({projectedTeam:{team, gamesPlayed, gamesRemaining, paceWeight, projWeight}})});
     const topRow = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}});
     topRow.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"10px"}},
       h("span",{style:{fontSize:rankSize(i),fontWeight:"700",color:C.muted,minWidth:"28px"}},rankIcon(i)),
@@ -867,7 +898,7 @@ function buildProjected() {
     topRow.appendChild(rightCol);
     card.appendChild(topRow);
     const barWrap = h("div",{style:{height:"4px",background:C.bg,borderRadius:"2px",overflow:"hidden",marginBottom:"8px"}});
-    barWrap.appendChild(h("div",{style:{height:"100%",width:`${pct}%`,background:i===0?`linear-gradient(90deg,${C.accent},${C.red})`:`${C.accent}55`,borderRadius:"2px",transition:"width 0.6s ease"}}));
+    barWrap.appendChild(h("div",{style:{height:"100%",width:`${pct}%`,background:isFirst?`linear-gradient(90deg,${C.accent},${C.red})`:`${C.accent}55`,borderRadius:"2px",transition:"width 0.6s ease"}}));
     card.appendChild(barWrap);
     card.appendChild(h("div",{style:{display:"flex",gap:"16px",fontSize:"11px",color:C.muted}},
       h("span",{},`Now: ${team.currentScore} pts`),
