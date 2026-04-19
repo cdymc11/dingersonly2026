@@ -283,12 +283,21 @@ async function fetchStats(name) {
       playerId = person.id;
     }
     const season = new Date().getFullYear();
-    const r2 = await fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=season&group=hitting&season=${season}&sportId=1`);
+    // Fetch stats and current team info in parallel
+    const [r2, r3] = await Promise.all([
+      fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=season&group=hitting&season=${season}&sportId=1`),
+      fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}?fields=people,currentTeam,abbreviation`)
+    ]);
     if (!r2.ok) return { hr: 0, hbp: 0, playerId, teamAbbr: null };
     const d2 = await r2.json();
     const split = d2.stats?.[0]?.splits?.[0];
-    // No splits = player found but no stats yet (0 games played) — return zeros
-    return { hr: split?.stat?.homeRuns??0, hbp: split?.stat?.hitByPitch??0, playerId, teamAbbr: split?.team?.abbreviation??null };
+    // Get team abbreviation: prefer stats split team, fall back to currentTeam
+    let teamAbbr = split?.team?.abbreviation ?? null;
+    if (!teamAbbr && r3.ok) {
+      const d3 = await r3.json();
+      teamAbbr = d3.people?.[0]?.currentTeam?.abbreviation ?? null;
+    }
+    return { hr: split?.stat?.homeRuns??0, hbp: split?.stat?.hitByPitch??0, playerId, teamAbbr };
   } catch { return null; }
 }
 
