@@ -1279,7 +1279,7 @@ function buildHistory() {
   setTimeout(()=>{
     if(!window.Chart) return;
 
-    const WINDOW = 21;
+    const WINDOW = 14;
 
     const buildDatasets = (upToIdx) => {
       const startIdx = Math.max(0, upToIdx - WINDOW + 1);
