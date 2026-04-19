@@ -12,7 +12,7 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; background: #0a0f1e; font-family: 'DM Sans', sans-serif; color: #f0f4ff; }
-    #app { min-height: 100vh; }
+    #app { min-height: 100vh; padding-bottom: env(safe-area-inset-bottom, 0px); }
     @keyframes spin { to { transform: rotate(360deg); } }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     input { font-family: 'DM Sans', sans-serif; }
@@ -2151,11 +2151,10 @@ function render() {
   app.innerHTML="";
 
   // Header
-  const header=h("div",{style:{background:`linear-gradient(135deg,${C.surface} 0%,#0d1729 100%)`,borderBottom:`1px solid ${C.border}`,padding:"20px 20px 16px"}});
+  const header=h("div",{style:{background:`linear-gradient(135deg,${C.surface} 0%,#0d1729 100%)`,borderBottom:`1px solid ${C.border}`,padding:"env(safe-area-inset-top, 20px) 20px 16px",paddingTop:"max(env(safe-area-inset-top), 20px)"}});
   const hInner=h("div",{style:{maxWidth:"640px",margin:"0 auto",display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:"12px"}});
   const titleBlock=h("div",{},
     h("div",{style:{fontFamily:"'Bebas Neue', sans-serif",fontSize:"38px",letterSpacing:"0.05em",color:C.accent,lineHeight:"1"}},"⚾ DINGERS ONLY"),
-    h("div",{style:{color:C.muted,fontSize:"13px",letterSpacing:"0.15em",textTransform:"uppercase",marginTop:"2px"}},"Fantasy Baseball · 2026"),
     h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginTop:"10px"}},
       h("button",{style:{padding:"6px 14px",borderRadius:"6px",cursor:"pointer",fontWeight:"700",fontSize:"12px",background:`${C.accent}22`,border:`1px solid ${C.accent}55`,color:C.accent,opacity:S.refreshing?"0.6":"1"},onClick:refreshAllStats},S.refreshing?"⟳ Refreshing…":"⟳ Refresh Stats"),
       S.refreshStatus?h("span",{style:{color:C.green,fontSize:"12px"}},S.refreshStatus):S.lastUpdated?h("span",{style:{color:C.muted,fontSize:"11px"}},`Updated ${fmtTime(S.lastUpdated)}`):null
