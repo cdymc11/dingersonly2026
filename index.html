@@ -1380,9 +1380,8 @@ function buildRules() {
   const days = Math.floor(diff / (1000*60*60*24));
   const hours = Math.floor((diff % (1000*60*60*24)) / (1000*60*60));
   const mins = Math.floor((diff % (1000*60*60)) / (1000*60));
-  const secs = Math.floor((diff % (1000*60)) / 1000);
   const countdown = diff > 0
-    ? `${days}d ${hours}h ${mins}m ${secs}s`
+    ? `${days}d ${hours}h ${mins}m`
     : "🎉 The All-Star Game is here!";
 
   const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
@@ -2011,7 +2010,7 @@ function handleLogin() {
 }
 
 render();
-setInterval(() => { if(S.tab === "rules") render(); }, 1000);
+setInterval(() => { if(S.tab === "rules") render(); }, 60000);
 
 const _splash = document.getElementById("splash-screen");
 if(_splash) {
