@@ -1279,19 +1279,32 @@ function buildHistory() {
   setTimeout(()=>{
     if(!window.Chart) return;
 
-    const buildDatasets = (upToIdx) => teamIds.map(id=>({
-      label: teamNames[id]||`Team ${id}`,
-      data: scoresByTeam[id].slice(0, upToIdx+1).map((v,i)=>({x:allLabels[i],y:v})),
-      borderColor: colorMap[id],
-      backgroundColor: colorMap[id]+"22",
-      borderWidth: 2,
-      borderDash: dashMap[id],
-      pointRadius: 0,
-      pointHoverRadius: 4,
-      pointHoverBackgroundColor: colorMap[id],
-      tension: 0.3,
-      spanGaps: true,
-    }));
+    const WINDOW = 21;
+
+    const buildDatasets = (upToIdx) => {
+      const startIdx = Math.max(0, upToIdx - WINDOW + 1);
+      return teamIds.map(id=>({
+        label: teamNames[id]||`Team ${id}`,
+        data: scoresByTeam[id].slice(startIdx, upToIdx+1).map((v,i)=>({x:allLabels[startIdx+i],y:v})),
+        borderColor: colorMap[id],
+        backgroundColor: colorMap[id]+"22",
+        borderWidth: 2,
+        borderDash: dashMap[id],
+        pointRadius: 0,
+        pointHoverRadius: 4,
+        pointHoverBackgroundColor: colorMap[id],
+        tension: 0.3,
+        spanGaps: true,
+      }));
+    };
+
+    const getYRange = (upToIdx) => {
+      const startIdx = Math.max(0, upToIdx - WINDOW + 1);
+      const vals = teamIds.flatMap(id=>scoresByTeam[id].slice(startIdx, upToIdx+1).filter(v=>v!==null));
+      const minV = Math.max(0, Math.min(...vals) - 3);
+      const maxV = Math.max(...vals) + 3;
+      return {min: Math.floor(minV), max: Math.ceil(maxV)};
+    };
 
     const chart = new window.Chart(canvas, {
       type: "line",
@@ -1319,10 +1332,10 @@ function buildHistory() {
           x: {
             type: "category",
             grid: {color:"#1e2a3a"},
-            ticks: {color:C.muted, font:{size:10}, maxTicksLimit:6, autoSkip:true}
+            ticks: {color:C.muted, font:{size:10}, maxTicksLimit:7, autoSkip:true}
           },
           y: {
-            min: 0,
+            ...getYRange(sliderIdx),
             grid: {color:"#1e2a3a"},
             ticks: {color:C.muted, font:{size:10}, stepSize:5}
           }
@@ -1333,7 +1346,10 @@ function buildHistory() {
     slider.addEventListener("input", ()=>{
       sliderIdx = parseInt(slider.value);
       sliderLabel.textContent = allLabels[sliderIdx];
+      const range = getYRange(sliderIdx);
       chart.data.datasets = buildDatasets(sliderIdx);
+      chart.options.scales.y.min = range.min;
+      chart.options.scales.y.max = range.max;
       chart.update();
     });
   }, 0);
