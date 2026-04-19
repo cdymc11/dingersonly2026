@@ -324,6 +324,7 @@ let S = {
   // weekly recap
   wkResults: null, wkLoading: false, wkDone: false,
   recentView: "yesterday",
+  lbFilter: "pts",
   // scores
   scResults: null, scLoading: false, scDone: false,
   // up to bat
@@ -528,32 +529,59 @@ function buildStandings() {
 
 // ── Leaderboard ───────────────────────────────────────────────────────────────
 function buildLeaderboard() {
+  const filter = S.lbFilter || "pts";
   const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
 
-  // Top Points Leaders (HR + HBP players combined, top 20)
+  // Filter buttons
+  const filterRow = h("div",{style:{display:"flex",gap:"8px",marginBottom:"16px"}});
+  [["pts","Total"],["hr","HR Only"],["hbp","HBP Only"]].forEach(([id,lbl])=>{
+    const active = filter===id;
+    filterRow.appendChild(h("button",{
+      style:{flex:"1",padding:"7px 4px",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",
+        background:active?C.accent:"transparent",
+        border:`1px solid ${active?C.accent:C.border}`,
+        color:active?"#000":C.muted},
+      onClick:()=>set({lbFilter:id})
+    },lbl));
+  });
+  wrap.appendChild(filterRow);
+
+  // Build player list based on filter
   const all=[];
   S.teams.forEach(team=>(team.players||[]).filter(p=>p.name?.trim()).forEach(p=>{
     const pts = p.type==="hr" ? (p.effectiveHR||0) : (p.effectiveHBP||0);
     all.push({name:p.name, teamAbbr:p.teamAbbr, pts, type:p.type, fantasyTeam:team.name, dropped:!!p.droppedAt, added:!!p.addedAt});
   }));
-  const top = [...all].sort((a,b)=>b.pts-a.pts).slice(0,20);
-  if(top.length>0) {
-    const maxP = Math.max(...top.map(p=>p.pts),1);
-    wrap.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"16px"}},
-      h("span",{style:{fontSize:"20px"}},"⚡"),
-      h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Top Points Leaders")
-    ));
+
+  let filtered, title, statLabel;
+  if(filter==="pts") {
+    filtered = [...all].sort((a,b)=>b.pts-a.pts).slice(0,20);
+    title = "Top 20 · Total Points";
+    statLabel = null; // show HR/HBP per player
+  } else if(filter==="hr") {
+    filtered = [...all].filter(p=>p.type==="hr").sort((a,b)=>b.pts-a.pts).slice(0,20);
+    title = "Top 20 · Home Runs";
+    statLabel = "HR";
+  } else {
+    filtered = [...all].filter(p=>p.type==="hbp").sort((a,b)=>b.pts-a.pts);
+    title = "All 8 HBP Players · Ranked";
+    statLabel = "HBP";
+  }
+
+  if(filtered.length > 0) {
+    const maxP = Math.max(...filtered.map(p=>p.pts),1);
+    wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"10px"}},title));
     const plist = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",overflow:"hidden"}});
-    top.forEach((p,i)=>{
+    filtered.forEach((p,i)=>{
       const color = p.type==="hr" ? C.red : C.green;
-      const row = h("div",{class:"row-hover",style:{padding:"12px 18px",borderBottom:i<top.length-1?`1px solid ${C.border}33`:"none",cursor:"pointer"},onClick:()=>openSpotlight(p.name,p.fantasyTeam,p.type)});
+      const row = h("div",{class:"row-hover",style:{padding:"12px 18px",borderBottom:i<filtered.length-1?`1px solid ${C.border}33`:"none",cursor:"pointer"},onClick:()=>openSpotlight(p.name,p.fantasyTeam,p.type)});
       const tr = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}});
       const nameWrap = h("span",{style:{color:p.dropped?C.muted:C.text,fontSize:"14px",fontWeight:"600"}},p.name);
       if(p.teamAbbr) nameWrap.appendChild(h("span",{style:{color:C.muted,fontWeight:"400"}},` (${p.teamAbbr})`));
       if(p.dropped) nameWrap.appendChild(h("span",{style:{fontSize:"10px",marginLeft:"5px",color:C.muted}},"(dropped)"));
       if(p.added) nameWrap.appendChild(h("span",{style:{fontSize:"10px",marginLeft:"5px",color:C.green}},"(added)"));
       const right = h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
-      right.appendChild(h("span",{style:{color:C.muted,fontSize:"10px",textTransform:"uppercase",fontWeight:"600"}},p.type==="hr"?"HR":"HBP"));
+      right.appendChild(h("span",{style:{color:C.muted,fontSize:"10px",textTransform:"uppercase",fontWeight:"600"}},statLabel||(p.type==="hr"?"HR":"HBP")));
       right.appendChild(h("span",{style:{color,fontFamily:"'Bebas Neue', sans-serif",fontSize:"24px",fontWeight:"800"}},p.pts));
       tr.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"10px"}},
         h("span",{style:{color:C.muted,fontSize:"12px",minWidth:"20px",fontWeight:"700"}},`#${i+1}`),
@@ -1206,26 +1234,23 @@ function buildProjectedTeamModal() {
   const TOTAL_GAMES = 162;
 
   const overlay = h("div",{style:{position:"fixed",inset:"0",background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:"1100",padding:"16px"},onClick:()=>set({projectedTeam:null})});
-  const modal = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"16px",padding:"24px",maxWidth:"420px",width:"100%",maxHeight:"88vh",overflowY:"auto"},onClick:e=>e.stopPropagation()});
+  const modal = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"16px",padding:"0",maxWidth:"420px",width:"100%",maxHeight:"88vh",overflowY:"auto"},onClick:e=>e.stopPropagation()});
 
   // Header
-  modal.appendChild(h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"6px"}},
+  const hdr = h("div",{style:{padding:"18px 18px 12px",borderBottom:`1px solid ${C.border}`}});
+  hdr.appendChild(h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"4px"}},
     h("div",{},
       h("div",{style:{color:C.text,fontWeight:"800",fontSize:"18px"}},team.name),
       h("div",{style:{color:C.muted,fontSize:"12px",marginTop:"2px"}},team.owner||"")
     ),
     h("button",{style:{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"20px",lineHeight:"1"},onClick:()=>set({projectedTeam:null})},"✕")
   ));
-  modal.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",marginBottom:"20px"}},
+  hdr.appendChild(h("div",{style:{color:C.muted,fontSize:"11px"}},
     `${Math.round(projWeight*100)}% preseason · ${Math.round(paceWeight*100)}% pace · ${gamesRemaining} games left`
   ));
+  modal.appendChild(hdr);
 
-  // HR Players
-  modal.appendChild(h("div",{style:{color:C.red,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"8px"}},"HR Players"));
-  const hrPlayers = (team.players||[]).filter(p=>p.type==="hr");
-  const hrList = h("div",{style:{background:C.bg,borderRadius:"10px",overflow:"hidden",marginBottom:"16px"}});
-
-  // Calculate per-player projections
+  // Per-player projection helper
   const playerProj = (p) => {
     const actual = p.type==="hr" ? (p.effectiveHR||0) : (p.effectiveHBP||0);
     const preseason = PRESEASON_PROJ[p.name] ?? null;
@@ -1239,61 +1264,92 @@ function buildProjectedTeamModal() {
       const preseasonRemaining = (preseason / TOTAL_GAMES) * gamesRemaining;
       projFinal = actual + (paceWeight * paceRemaining) + (projWeight * preseasonRemaining);
     }
-    return { actual, preseason, projFinal: Math.round(projFinal) };
+    const projRounded = Math.round(projFinal);
+    const diff = preseason !== null ? projRounded - preseason : null;
+    let heat = "—";
+    if(preseason && preseason > 0) {
+      const seasonPace = Math.round((actual / Math.max(gamesPlayed,1)) * TOTAL_GAMES);
+      const pct = (seasonPace - preseason) / preseason;
+      if(pct >= 0.20)       heat = "🔥🔥🔥";
+      else if(pct >= 0)     heat = "🔥🔥";
+      else if(pct >= -0.20) heat = "🔥";
+      else                  heat = "❄️";
+    }
+    return { actual, preseason, projFinal: projRounded, diff, heat };
   };
 
-  hrPlayers.forEach((p,i) => {
-    const {actual, preseason, projFinal} = playerProj(p);
-    const row = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",borderBottom:i<hrPlayers.length-1?`1px solid ${C.border}22`:"none",cursor:"pointer"},onClick:()=>openSpotlight(p.name,team.name,p.type)});
-    row.classList.add("row-hover");
-    const left = h("div",{});
-    const nameEl = h("span",{style:{color:p.droppedAt?C.muted:C.text,fontWeight:"600",fontSize:"14px"}},p.name);
-    if(p.teamAbbr) nameEl.appendChild(h("span",{style:{color:C.muted,fontWeight:"400",fontSize:"12px"}},` (${p.teamAbbr})`));
-    left.appendChild(nameEl);
-    left.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",marginTop:"2px"}},
-      preseason !== null ? `${actual} actual · ${preseason} preseason proj` : `${actual} actual · no preseason data`
-    ));
-    const right = h("div",{style:{textAlign:"right"}});
-    right.appendChild(h("div",{style:{color:C.red,fontFamily:"'Bebas Neue', sans-serif",fontSize:"22px",fontWeight:"800",lineHeight:"1"}},projFinal));
-    right.appendChild(h("div",{style:{color:C.muted,fontSize:"10px",textTransform:"uppercase"}},"proj HR"));
-    row.append(left, right);
-    hrList.appendChild(row);
-  });
-  modal.appendChild(hrList);
+  // Column header
+  const colHdr = () => h("div",{style:{display:"flex",alignItems:"center",gap:"4px",padding:"4px 16px",background:C.surface}},
+    h("div",{style:{minWidth:"22px"}},""),
+    h("div",{style:{flex:"1"}},""),
+    h("div",{style:{minWidth:"26px",textAlign:"right",color:C.muted,fontSize:"9px",textTransform:"uppercase",letterSpacing:"0.07em",fontWeight:"700"}},"now"),
+    h("div",{style:{minWidth:"34px",textAlign:"right",color:C.muted,fontSize:"9px",textTransform:"uppercase",letterSpacing:"0.07em",fontWeight:"700"}},"proj"),
+    h("div",{style:{minWidth:"30px",textAlign:"right",color:C.muted,fontSize:"9px",textTransform:"uppercase",letterSpacing:"0.07em",fontWeight:"700"}},"vs pre")
+  );
 
-  // HBP Player
-  const hbpPlayers = (team.players||[]).filter(p=>p.type==="hbp");
-  if(hbpPlayers.length > 0) {
-    modal.appendChild(h("div",{style:{color:C.green,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"8px"}},"HBP Player"));
-    const hbpList = h("div",{style:{background:C.bg,borderRadius:"10px",overflow:"hidden",marginBottom:"16px"}});
-    hbpPlayers.forEach((p,i) => {
-      const {actual, preseason, projFinal} = playerProj(p);
-      const row = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",cursor:"pointer"},onClick:()=>openSpotlight(p.name,team.name,p.type)});
-      row.classList.add("row-hover");
-      const left = h("div",{});
-      const nameEl = h("span",{style:{color:p.droppedAt?C.muted:C.text,fontWeight:"600",fontSize:"14px"}},p.name);
-      if(p.teamAbbr) nameEl.appendChild(h("span",{style:{color:C.muted,fontWeight:"400",fontSize:"12px"}},` (${p.teamAbbr})`));
-      left.appendChild(nameEl);
-      left.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",marginTop:"2px"}},
-        preseason !== null ? `${actual} actual · ${preseason} preseason proj` : `${actual} actual · no preseason data`
-      ));
-      const right = h("div",{style:{textAlign:"right"}});
-      right.appendChild(h("div",{style:{color:C.green,fontFamily:"'Bebas Neue', sans-serif",fontSize:"22px",fontWeight:"800",lineHeight:"1"}},projFinal));
-      right.appendChild(h("div",{style:{color:C.muted,fontSize:"10px",textTransform:"uppercase"}},"proj HBP"));
-      row.append(left, right);
-      hbpList.appendChild(row);
+  // Section builder
+  const buildSection = (players, typeColor, typeLabel) => {
+    if(!players.length) return;
+    modal.appendChild(h("div",{style:{color:typeColor,fontSize:"10px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",padding:"10px 16px 0"}},typeLabel));
+    modal.appendChild(colHdr());
+    const list = h("div",{style:{marginBottom:"6px"}});
+    players.forEach((p,i) => {
+      const {actual, preseason, projFinal, diff, heat} = playerProj(p);
+      const isLast = i === players.length - 1;
+      const row = h("div",{
+        class:"row-hover",
+        style:{display:"flex",alignItems:"center",gap:"4px",padding:"8px 16px",
+          borderBottom:isLast?"none":`1px solid ${C.border}22`,cursor:"pointer"},
+        onClick:()=>openSpotlight(p.name,team.name,p.type)
+      });
+      // Heat
+      row.appendChild(h("div",{style:{minWidth:"22px",fontSize:"13px",lineHeight:"1"}},heat));
+      // Name
+      const nameCol = h("div",{style:{flex:"1",minWidth:0}});
+      const nameEl = h("span",{style:{color:p.droppedAt?C.muted:C.text,fontWeight:"600",fontSize:"13px"}},p.name);
+      if(p.teamAbbr) nameEl.appendChild(h("span",{style:{color:C.muted,fontWeight:"400",fontSize:"11px"}},` (${p.teamAbbr})`));
+      nameCol.appendChild(nameEl);
+      if(preseason !== null) nameCol.appendChild(h("div",{style:{color:C.muted,fontSize:"9px",marginTop:"1px"}},`pre: ${preseason}`));
+      row.appendChild(nameCol);
+      // Now
+      const nowEl = h("div",{style:{minWidth:"26px",textAlign:"right"}});
+      nowEl.appendChild(h("div",{style:{color:typeColor,fontFamily:"'Bebas Neue', sans-serif",fontSize:"17px",fontWeight:"800",lineHeight:"1"}},actual));
+      row.appendChild(nowEl);
+      // Proj
+      const projEl = h("div",{style:{minWidth:"34px",textAlign:"right"}});
+      projEl.appendChild(h("div",{style:{color:typeColor,fontFamily:"'Bebas Neue', sans-serif",fontSize:"22px",fontWeight:"800",lineHeight:"1"}},projFinal));
+      projEl.appendChild(h("div",{style:{color:C.muted,fontSize:"8px",textTransform:"uppercase"}},"proj"));
+      row.appendChild(projEl);
+      // vs pre diff
+      const diffEl = h("div",{style:{minWidth:"30px",textAlign:"right"}});
+      if(diff !== null) {
+        const diffColor = diff > 0 ? "#4caf50" : diff < 0 ? "#6ab0ff" : C.muted;
+        diffEl.appendChild(h("div",{style:{color:diffColor,fontSize:"11px",fontWeight:"800",lineHeight:"1"}},diff > 0 ? `+${diff}` : `${diff}`));
+        diffEl.appendChild(h("div",{style:{color:C.muted,fontSize:"8px",textTransform:"uppercase"}},"vs pre"));
+      } else {
+        diffEl.appendChild(h("div",{style:{color:C.muted,fontSize:"11px"}},"—"));
+      }
+      row.appendChild(diffEl);
+      list.appendChild(row);
     });
-    modal.appendChild(hbpList);
-  }
+    modal.appendChild(list);
+  };
+
+  buildSection((team.players||[]).filter(p=>p.type==="hr"&&!p.droppedAt), C.red, "HR Players");
+  buildSection((team.players||[]).filter(p=>p.type==="hbp"&&!p.droppedAt), C.green, "HBP Player");
 
   // Team total
-  const totalProj = [...hrPlayers,...hbpPlayers].reduce((s,p)=>s+playerProj(p).projFinal,0);
-  modal.appendChild(h("div",{style:{background:`${C.accent}11`,border:`1px solid ${C.accent}33`,borderRadius:"10px",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"16px"}},
-    h("span",{style:{color:C.muted,fontSize:"12px",fontWeight:"600"}},"Projected Team Total"),
-    h("span",{style:{color:C.accent,fontFamily:"'Bebas Neue', sans-serif",fontSize:"26px",fontWeight:"800"}},totalProj)
+  const allActive = (team.players||[]).filter(p=>!p.droppedAt);
+  const totalProj = allActive.reduce((s,p)=>s+playerProj(p).projFinal, 0);
+  modal.appendChild(h("div",{style:{background:`${C.accent}11`,border:`1px solid ${C.accent}33`,margin:"8px 16px 16px",borderRadius:"10px",padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+    h("div",{},
+      h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"600"}},"Projected Team Total"),
+      h("div",{style:{color:C.muted,fontSize:"9px",marginTop:"3px"}},"🔥🔥🔥 20%+ above pre  🔥🔥 on pace  🔥 slightly below  ❄️ cold")
+    ),
+    h("span",{style:{color:C.accent,fontFamily:"'Bebas Neue', sans-serif",fontSize:"28px",fontWeight:"800"}},totalProj)
   ));
 
-  modal.appendChild(h("button",{style:{width:"100%",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"14px"},onClick:()=>set({projectedTeam:null})},"Close"));
+  modal.appendChild(h("button",{style:{width:"calc(100% - 32px)",margin:"0 16px 16px",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"14px"},onClick:()=>set({projectedTeam:null})},"Close"));
   overlay.appendChild(modal);
   return overlay;
 }
