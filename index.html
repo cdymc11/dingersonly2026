@@ -2305,22 +2305,19 @@ function handleLogin() {
 
 render();
 setInterval(() => { if(S.tab === "rules") render(); }, 60000);
-</script>
 
-<script>
-(function() {
-  // Dismiss splash after animation completes (~2.5s)
-  // Wait for ball to exit screen (~3.0s), then fade out (0.6s), then remove
-  setTimeout(function() {
-    var splash = document.getElementById('splash-screen');
-    if (splash) {
-      splash.classList.add('fade-out');
-      setTimeout(function() {
-        if (splash.parentNode) splash.parentNode.removeChild(splash);
-      }, 600);
-    }
-  }, 1900);
-})();
+// Dismiss splash — wait for both: animation (1.9s min) AND render to complete
+const splashEl = document.getElementById("splash-screen");
+if(splashEl) {
+  const dismissSplash = () => {
+    splashEl.classList.add("fade-out");
+    setTimeout(() => { if(splashEl.parentNode) splashEl.parentNode.removeChild(splashEl); }, 600);
+  };
+  // Enforce minimum 1.9s so animation plays, then dismiss immediately after render
+  const minWait = new Promise(res => setTimeout(res, 1900));
+  const renderDone = new Promise(res => { res(); }); // render() is sync so already done
+  Promise.all([minWait, renderDone]).then(dismissSplash);
+}
 </script>
 
 </body>
