@@ -469,7 +469,7 @@ let S = {
   dbResults: [], dbRunning: false, dbDone: false,
 };
 
-function set(partial) { S = {...S, ...partial}; render(); }
+function set(partial) { S = {...S, ...partial}; try { render(); } catch(e) { console.error("Render error:", e); document.getElementById("app").innerHTML = `<div style="color:#f5c842;padding:20px;font-family:monospace;font-size:12px">Render error: ${e.message}<br><pre>${e.stack}</pre></div>`; } }
 
 // Correct known misspellings from old Firebase data
 const NAME_CORRECTIONS = {
@@ -1107,6 +1107,10 @@ function buildProjected() {
   });
 
   const sorted = [...projTeams].sort((a,b)=>b.projectedScore-a.projectedScore);
+  if(sorted.length === 0) {
+    wrap.appendChild(h("div",{style:{textAlign:"center",padding:"40px",color:C.muted,fontSize:"13px"}},"Loading…"));
+    return wrap;
+  }
   const maxProj = Math.max(...sorted.map(t=>t.projectedScore),1);
   const projRankInfo = buildRankInfo(sorted.map(t=>t.projectedScore));
 
