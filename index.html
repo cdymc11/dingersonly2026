@@ -380,14 +380,12 @@ onSnapshot(leagueRef, snap => {
             p.hrBaseline = sp.hrBaseline ?? null;
             p.droppedAt = sp.droppedAt || null;
             p.addedAt = sp.addedAt || null;
-            if(sp.teamAbbr) p.teamAbbr = sp.teamAbbr;
           }
           if(p.type === "hbp") {
             p.effectiveHBP = sp.effectiveHBP || 0;
             p.hbpBaseline = sp.hbpBaseline ?? null;
             p.droppedAt = sp.droppedAt || null;
             p.addedAt = sp.addedAt || null;
-            if(sp.teamAbbr) p.teamAbbr = sp.teamAbbr;
           }
         });
         // Also append any added (transaction) players beyond the base 8
