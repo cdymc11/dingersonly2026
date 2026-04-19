@@ -1279,7 +1279,7 @@ function buildHistory() {
   setTimeout(()=>{
     if(!window.Chart) return;
 
-    const WINDOW = 14;
+    const WINDOW = 7;
 
     const buildDatasets = (upToIdx) => {
       const startIdx = Math.max(0, upToIdx - WINDOW + 1);
@@ -1392,7 +1392,7 @@ function buildRules() {
 
   // All-Star countdown card
   const asg = h("div",{style:{background:`linear-gradient(135deg,${C.accent}22,${C.red}11)`,border:`1px solid ${C.accent}55`,borderRadius:"14px",padding:"20px",marginBottom:"20px",textAlign:"center"}});
-  asg.appendChild(h("div",{style:{color:C.accent,fontSize:"12px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:"6px"}},"⏳ Trade Deadline · All-Star Game"));
+  asg.appendChild(h("div",{style:{color:C.accent,fontSize:"12px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:"6px"}},"⏳ Transaction Deadline · All-Star Game"));
   asg.appendChild(h("div",{style:{color:C.text,fontSize:"15px",fontWeight:"700",marginBottom:"4px"}},"July 14, 2026 · Citizens Bank Park, Philadelphia"));
   asg.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"14px"}},"First Pitch 8:00 PM ET · No roster moves after first pitch"));
   asg.appendChild(h("div",{style:{color:C.accent,fontFamily:"'Bebas Neue', sans-serif",fontSize:"36px",fontWeight:"800",letterSpacing:"0.05em",lineHeight:"1"}},countdown));
