@@ -9,6 +9,7 @@
   <title>Dingers Only 2026</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; background: #0a0f1e; font-family: 'DM Sans', sans-serif; color: #f0f4ff; }
@@ -125,7 +126,7 @@ async function loadHistory() {
 // Auto-snapshot every Monday — checks once on load
 function maybeAutoSnapshot() {
   const now = new Date();
-  if(now.getDay() !== 1) return; // only on Monday
+  // Daily snapshot — runs every day
   const todayStr = now.toISOString().split("T")[0];
   const lastSnap = localStorage.getItem("lastHistorySnap");
   if(lastSnap === todayStr) return; // already snapped today
@@ -373,6 +374,8 @@ let S = {
   utbResults: null, utbLoading: false, utbDone: false, utbApiAbbrs: [],
   // debug
   dbResults: [], dbRunning: false, dbDone: false,
+  // history backfill
+  backfillRunning: false, backfillStatus: "", backfillDone: false,
 };
 
 function set(partial) { S = {...S, ...partial}; render(); }
@@ -1125,8 +1128,78 @@ async function loadScores() {
 }
 
 // ── Weekly Recap ──────────────────────────────────────────────────────────────
+async function backfillHistory() {
+  set({backfillRunning:true, backfillStatus:"Starting backfill…", backfillDone:false});
+  const season = new Date().getFullYear();
+  const seasonStart = new Date("2026-03-26");
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+
+  // Build list of dates to backfill
+  const dates = [];
+  for(let d = new Date(seasonStart); d <= yesterday; d.setDate(d.getDate()+1)) {
+    dates.push(d.toISOString().split("T")[0]);
+  }
+
+  // Check which dates already have snapshots
+  let existingDates = new Set();
+  try {
+    const q = query(historyCol, orderBy("date","asc"));
+    const snap = await getDocs(q);
+    snap.docs.forEach(d => existingDates.add(d.data().date));
+  } catch(e) {}
+
+  const missing = dates.filter(d => !existingDates.has(d));
+  set({backfillStatus:`Found ${missing.length} dates to backfill…`});
+
+  if(missing.length === 0) {
+    set({backfillRunning:false, backfillStatus:"Already up to date!", backfillDone:true});
+    setTimeout(()=>set({backfillStatus:"",backfillDone:false}),4000);
+    return;
+  }
+
+  let done = 0;
+  for(const dateStr of missing) {
+    try {
+      set({backfillStatus:`Fetching ${dateStr} (${done+1}/${missing.length})…`});
+      // Get cumulative stats for all players up to this date
+      const teamScores = S.teams.map(t=>({id:t.id, name:t.name, owner:t.owner||"", score:0}));
+
+      for(const team of S.teams) {
+        const ts = teamScores.find(t=>t.id===team.id);
+        for(const p of (team.players||[])) {
+          if(!p.name?.trim()) continue;
+          const playerId = PLAYER_IDS[p.name]; if(!playerId) continue;
+          // Skip players added after this date
+          if(p.addedAt && p.addedAt > dateStr) continue;
+          try {
+            const r = await fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=gameLog&group=hitting&season=${season}&startDate=2026-03-26&endDate=${dateStr}&sportId=1`);
+            if(!r.ok) continue;
+            const d = await r.json();
+            const splits = d.stats?.[0]?.splits||[];
+            let hr=0, hbp=0;
+            splits.forEach(s=>{ hr+=s.stat?.homeRuns??0; hbp+=s.stat?.hitByPitch??0; });
+            // Apply baseline for added players
+            if(p.addedAt && p.hrBaseline!==null && p.type==="hr") hr = Math.max(0, hr - p.hrBaseline);
+            if(p.addedAt && p.hbpBaseline!==null && p.type==="hbp") hbp = Math.max(0, hbp - p.hbpBaseline);
+            ts.score += p.type==="hr" ? hr : hbp;
+          } catch(e){continue;}
+        }
+      }
+
+      const standings = [...teamScores].sort((a,b)=>b.score-a.score);
+      const label = new Date(dateStr+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"});
+      await setDoc(doc(db,"history",dateStr), {label, date:dateStr, standings});
+      done++;
+    } catch(e){ continue; }
+  }
+
+  set({backfillRunning:false, backfillStatus:`Done! ${done} snapshots saved.`, backfillDone:true});
+  loadHistory();
+  setTimeout(()=>set({backfillStatus:"",backfillDone:false}),5000);
+}
+
+
 function buildHistory() {
-  // Trigger load if not yet loaded
   if(S.historyWeeks === null && !S.historyLoading) loadHistory();
 
   const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
@@ -1134,7 +1207,7 @@ function buildHistory() {
     h("span",{style:{fontSize:"20px"}},"📈"),
     h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Season History")
   ));
-  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"20px"}},"Weekly standings snapshots · Saved automatically every Monday"));
+  wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"20px"}},"Daily standings · drag to replay the season"));
 
   if(S.historyLoading) { wrap.appendChild(spinner("Loading history…")); return wrap; }
 
@@ -1142,95 +1215,145 @@ function buildHistory() {
     wrap.appendChild(h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",padding:"32px",textAlign:"center"}},
       h("div",{style:{fontSize:"32px",marginBottom:"8px"}},"📭"),
       h("div",{style:{color:C.text,fontWeight:"700",fontSize:"16px",marginBottom:"6px"}},"No snapshots yet"),
-      h("div",{style:{color:C.muted,fontSize:"13px",marginBottom:"20px"}},"History saves automatically every Monday. You can also save a snapshot now."),
-      S.commishUnlocked ? h("button",{style:{padding:"10px 24px",borderRadius:"8px",cursor:"pointer",background:C.accent,border:"none",color:"#000",fontWeight:"700",fontSize:"13px"},onClick:async(e)=>{
-        const btn = e.target;
-        btn.textContent = "Saving…";
-        btn.disabled = true;
-        const ok = await saveHistorySnapshot(`Week of ${new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})}`);
-        if(ok) { btn.textContent = "✅ Saved!"; loadHistory(); }
-        else { btn.textContent = "❌ Failed — check Firebase rules"; btn.disabled = false; }
-      }},"💾 Save Snapshot Now") : h("div",{style:{color:C.muted,fontSize:"12px"}},"Enter commissioner PIN to save a snapshot manually")
+      h("div",{style:{color:C.muted,fontSize:"13px"}},"Use the Backfill button in the Commissioner Panel to load historical data.")
     ));
     return wrap;
   }
 
   const weeks = S.historyWeeks;
-  const idx = Math.max(0, Math.min(S.historyWeekIdx, weeks.length - 1));
-  const current = weeks[idx];
-  const prev = idx > 0 ? weeks[idx - 1] : null;
+  const teamIds = [...new Set(weeks.flatMap(w=>w.standings.map(t=>t.id)))].sort();
+  const teamNames = {};
+  weeks.forEach(w=>w.standings.forEach(t=>{ teamNames[t.id]=t.name; }));
 
-  // Week selector
-  const selector = h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.card,border:`1px solid ${C.border}`,borderRadius:"10px",padding:"10px 16px",marginBottom:"20px"}});
-  selector.appendChild(h("button",{style:{background:"none",border:"none",color:idx>0?C.accent:C.border,fontSize:"22px",cursor:idx>0?"pointer":"default",padding:"0 4px"},onClick:()=>idx>0&&set({historyWeekIdx:idx-1})},"‹"));
-  const midEl = h("div",{style:{textAlign:"center"}});
-  midEl.appendChild(h("div",{style:{color:C.text,fontWeight:"700",fontSize:"14px"}},current.label));
-  midEl.appendChild(h("div",{style:{color:C.muted,fontSize:"11px"}},`${idx+1} of ${weeks.length}`));
-  selector.appendChild(midEl);
-  selector.appendChild(h("button",{style:{background:"none",border:"none",color:idx<weeks.length-1?C.accent:C.border,fontSize:"22px",cursor:idx<weeks.length-1?"pointer":"default",padding:"0 4px"},onClick:()=>idx<weeks.length-1&&set({historyWeekIdx:idx+1})},"›"));
-  wrap.appendChild(selector);
+  // Colors and dash patterns per team id
+  const COLORS = ["#e8c84a","#e84a4a","#4ae89a","#6ab0ff","#ff8c42","#c084fc","#f472b6","#94a3b8"];
+  const DASHES = [[],[6,3],[2,2],[8,4,2,4],[4,4],[2,4],[10,3],[6,2,2,2]];
+  const colorMap = {}, dashMap = {};
+  teamIds.forEach((id,i)=>{ colorMap[id]=COLORS[i%COLORS.length]; dashMap[id]=DASHES[i%DASHES.length]; });
 
-  // Standings for this week
-  const list = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",overflow:"hidden",marginBottom:"20px"}});
-  current.standings.forEach((team, i) => {
-    const prevRank = prev ? prev.standings.findIndex(t=>t.id===team.id) : -1;
-    const movement = prev && prevRank !== -1 ? prevRank - i : null; // positive = moved up
-    let movEl;
-    if(movement === null) movEl = h("span",{style:{color:C.muted,fontSize:"12px"}},"—");
-    else if(movement > 0) movEl = h("span",{style:{color:"#4caf50",fontSize:"12px",fontWeight:"700"}},`↑${movement}`);
-    else if(movement < 0) movEl = h("span",{style:{color:"#6ab0ff",fontSize:"12px",fontWeight:"700"}},`↓${Math.abs(movement)}`);
-    else movEl = h("span",{style:{color:C.muted,fontSize:"12px"}},"—");
-
-    const isFirst = i === 0;
-    const isLast = i === current.standings.length - 1;
-    const row = h("div",{style:{
-      display:"flex",alignItems:"center",gap:"12px",padding:"12px 16px",
-      borderBottom:i<current.standings.length-1?`1px solid ${C.border}22`:"none",
-      background:isFirst?`${C.accent}08`:isLast?`#6ab0ff08`:"transparent"
-    }});
-
-    // Rank
-    let rankEl;
-    if(isFirst) rankEl = h("span",{style:{fontSize:"18px",minWidth:"28px",textAlign:"center"}},"🥇");
-    else if(isLast) rankEl = h("span",{style:{fontSize:"18px",minWidth:"28px",textAlign:"center"}},"💀");
-    else rankEl = h("span",{style:{color:C.muted,fontWeight:"700",fontSize:"13px",minWidth:"28px",textAlign:"center"}},`#${i+1}`);
-    row.appendChild(rankEl);
-
-    // Team info
-    const info = h("div",{style:{flex:"1"}});
-    info.appendChild(h("div",{style:{color:C.text,fontWeight:"700",fontSize:"14px"}},team.name));
-    info.appendChild(h("div",{style:{color:C.muted,fontSize:"11px"}},team.owner));
-    row.appendChild(info);
-
-    // Movement
-    row.appendChild(movEl);
-
-    // Score
-    const scoreEl = h("div",{style:{textAlign:"right",minWidth:"48px"}});
-    scoreEl.appendChild(h("div",{style:{color:C.accent,fontFamily:"'Bebas Neue', sans-serif",fontSize:"26px",fontWeight:"800",lineHeight:"1"}},team.score));
-    scoreEl.appendChild(h("div",{style:{color:C.muted,fontSize:"10px",textTransform:"uppercase"}},"pts"));
-    row.appendChild(scoreEl);
-    list.appendChild(row);
+  // Build per-team score arrays aligned to dates
+  const allDates = weeks.map(w=>w.date);
+  const allLabels = weeks.map(w=>w.label||w.date);
+  const scoresByTeam = {};
+  teamIds.forEach(id=>{
+    scoresByTeam[id] = weeks.map(w=>{
+      const entry = w.standings.find(t=>t.id===id);
+      return entry ? entry.score : null;
+    });
   });
-  wrap.appendChild(list);
 
-  // Commish save button
+  // Slider state
+  let sliderIdx = weeks.length - 1;
+
+  // Chart container
+  const chartWrap = h("div",{style:{position:"relative",width:"100%",height:"220px",marginBottom:"8px"}});
+  const canvas = h("canvas",{role:"img","aria-label":"Line chart of team scores over the season"});
+  chartWrap.appendChild(canvas);
+  wrap.appendChild(chartWrap);
+
+  // Slider
+  const sliderRow = h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"12px"}});
+  const slider = h("input");
+  slider.type = "range"; slider.min = "0"; slider.max = String(weeks.length-1);
+  slider.value = String(sliderIdx); slider.step = "1";
+  Object.assign(slider.style, {flex:"1"});
+  const sliderLabel = h("span",{style:{fontSize:"11px",color:C.muted,minWidth:"52px",textAlign:"right"}},allLabels[sliderIdx]);
+  sliderRow.append(
+    h("span",{style:{fontSize:"10px",color:C.muted}},allLabels[0]),
+    slider,
+    sliderLabel
+  );
+  wrap.appendChild(sliderRow);
+
+  // Legend
+  const legend = h("div",{style:{display:"flex",flexWrap:"wrap",gap:"6px 12px",marginBottom:"16px"}});
+  teamIds.forEach(id=>{
+    const item = h("div",{style:{display:"flex",alignItems:"center",gap:"5px"}});
+    item.appendChild(h("div",{style:{width:"8px",height:"8px",borderRadius:"50%",background:colorMap[id],flexShrink:"0"}}));
+    item.appendChild(h("span",{style:{fontSize:"10px",color:C.muted}},teamNames[id]||`Team ${id}`));
+    legend.appendChild(item);
+  });
+  wrap.appendChild(legend);
+
+  // Build Chart.js after DOM is appended
+  setTimeout(()=>{
+    if(!window.Chart) return;
+
+    const buildDatasets = (upToIdx) => teamIds.map(id=>({
+      label: teamNames[id]||`Team ${id}`,
+      data: scoresByTeam[id].slice(0, upToIdx+1).map((v,i)=>({x:allLabels[i],y:v})),
+      borderColor: colorMap[id],
+      backgroundColor: colorMap[id]+"22",
+      borderWidth: 2,
+      borderDash: dashMap[id],
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      pointHoverBackgroundColor: colorMap[id],
+      tension: 0.3,
+      spanGaps: true,
+    }));
+
+    const chart = new window.Chart(canvas, {
+      type: "line",
+      data: { datasets: buildDatasets(sliderIdx) },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: {duration: 200},
+        interaction: {mode:"index", intersect:false},
+        plugins: {
+          legend: {display:false},
+          tooltip: {
+            backgroundColor: C.card,
+            borderColor: C.border,
+            borderWidth: 1,
+            titleColor: C.muted,
+            bodyColor: C.text,
+            callbacks: {
+              title: (items) => items[0]?.label||"",
+              label: (item) => ` ${item.dataset.label}: ${item.raw.y ?? "—"}`
+            }
+          }
+        },
+        scales: {
+          x: {
+            type: "category",
+            grid: {color:"#1e2a3a"},
+            ticks: {color:C.muted, font:{size:10}, maxTicksLimit:6, autoSkip:true}
+          },
+          y: {
+            min: 0,
+            grid: {color:"#1e2a3a"},
+            ticks: {color:C.muted, font:{size:10}, stepSize:5}
+          }
+        }
+      }
+    });
+
+    slider.addEventListener("input", ()=>{
+      sliderIdx = parseInt(slider.value);
+      sliderLabel.textContent = allLabels[sliderIdx];
+      chart.data.datasets = buildDatasets(sliderIdx);
+      chart.update();
+    });
+  }, 0);
+
+  // Commission save button
   if(S.commishUnlocked) {
     wrap.appendChild(h("button",{
       style:{width:"100%",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"13px"},
       onClick:async(e)=>{
-        const btn = e.target;
-        btn.textContent = "Saving…";
-        btn.disabled = true;
-        const ok = await saveHistorySnapshot(`Week of ${new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})}`);
-        if(ok) { btn.textContent = "✅ Saved!"; loadHistory(); }
-        else { btn.textContent = "❌ Failed — check Firebase rules"; btn.style.color = C.red; btn.disabled = false; }
+        const btn=e.target; btn.textContent="Saving…"; btn.disabled=true;
+        const ok=await saveHistorySnapshot(new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"}));
+        if(ok){btn.textContent="✅ Saved!"; loadHistory();}
+        else{btn.textContent="❌ Failed"; btn.disabled=false;}
       }
     },"💾 Save Snapshot Now"));
   }
 
   return wrap;
 }
+
 
 // ── Rules ─────────────────────────────────────────────────────────────────────
 function buildRules() {
@@ -1782,6 +1905,22 @@ function buildCommish() {
   }},S.cpRefreshing?"⟳ Refreshing…":"⟳ Refresh Live Stats"));
   actions.appendChild(h("button",{style:{padding:"10px 18px",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"13px",background:C.accent,border:"none",color:"#000"},onClick:async()=>{await saveToFirebase(local);set({cpStatus:"✓ Saved!"});setTimeout(()=>set({cpStatus:""}),2000);}},  "💾 Save"));
   panel.appendChild(actions);
+
+  // History backfill section
+  panel.appendChild(h("div",{style:{marginTop:"24px",paddingTop:"20px",borderTop:`1px solid ${C.border}`}},
+    h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"8px"}},"History Backfill"),
+    h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"12px"}},"Pulls cumulative stats for every day since Opening Day and saves them as daily snapshots. Run once — takes ~5 minutes."),
+    S.backfillStatus ? h("div",{style:{color:S.backfillDone?C.green:C.accent,fontSize:"12px",marginBottom:"10px",fontWeight:"600"}},S.backfillStatus) : null,
+    h("button",{
+      style:{padding:"10px 18px",borderRadius:"8px",cursor:S.backfillRunning?"default":"pointer",fontWeight:"700",fontSize:"13px",
+        background:S.backfillRunning?"transparent":`${C.accent}22`,
+        border:`1px solid ${S.backfillRunning?C.border:C.accent+"55"}`,
+        color:S.backfillRunning?C.muted:C.accent,
+        opacity:S.backfillRunning?"0.6":"1"},
+      onClick:()=>{ if(!S.backfillRunning) backfillHistory(); }
+    }, S.backfillRunning ? "⟳ Running backfill…" : "📅 Backfill History")
+  ));
+
   overlay.appendChild(panel);
   return overlay;
 }
