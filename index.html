@@ -1867,7 +1867,10 @@ function buildCommish() {
     const row=h("div",{style:{display:"flex",gap:"8px",alignItems:"center",marginBottom:"8px"}});
     const ni=inp(p.name,v=>{local[S.cpActive].players[absIdx].name=v;set({cpLocal:local})},`HR Player ${ri+1}`,!!p.droppedAt);
     ni.style.flex="1"; row.appendChild(ni);
-    row.appendChild(h("span",{style:{color:C.red,fontSize:"12px",fontWeight:"700",minWidth:"38px",textAlign:"center"}},`${p.effectiveHR??0} HR`));
+    const hrInp = h("input",{type:"number",style:{width:"48px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:"4px",padding:"4px 6px",color:C.red,fontSize:"12px",fontWeight:"700",textAlign:"center"}});
+    hrInp.value = p.effectiveHR??0;
+    hrInp.addEventListener("change",ev=>{const v=Math.max(0,parseInt(ev.target.value)||0);local[S.cpActive].players[absIdx].effectiveHR=v;set({cpLocal:local});});
+    row.appendChild(hrInp);
     if(!team.hasUsedTransaction&&!p.droppedAt) row.appendChild(h("button",{style:{padding:"4px 8px",fontSize:"11px",borderRadius:"4px",cursor:"pointer",background:"#e84a4a22",border:"1px solid #e84a4a44",color:C.red,whiteSpace:"nowrap"},onClick:()=>{const today=new Date().toISOString().split("T")[0];local[S.cpActive].players[absIdx].droppedAt=today;local[S.cpActive].hasUsedTransaction=true;set({cpLocal:local});}},"Drop"));
     if(p.droppedAt) row.appendChild(h("span",{style:{fontSize:"11px",color:C.muted,whiteSpace:"nowrap"}},"dropped"));
     if(p.addedAt) row.appendChild(h("span",{style:{fontSize:"11px",color:C.green,whiteSpace:"nowrap"}},"added"));
@@ -1892,7 +1895,10 @@ function buildCommish() {
     const row=h("div",{style:{display:"flex",gap:"8px",alignItems:"center"}});
     const hi=inp(hbpP.name,v=>{local[S.cpActive].players[absIdx].name=v;set({cpLocal:local})},"HBP Player",!!hbpP.droppedAt);
     hi.style.flex="1"; row.appendChild(hi);
-    row.appendChild(h("span",{style:{color:C.green,fontSize:"12px",fontWeight:"700",minWidth:"44px",textAlign:"center"}},`${hbpP.effectiveHBP??0} HBP`));
+    const hbpInp = h("input",{type:"number",style:{width:"48px",background:C.bg,border:`1px solid ${C.border}`,borderRadius:"4px",padding:"4px 6px",color:C.green,fontSize:"12px",fontWeight:"700",textAlign:"center"}});
+    hbpInp.value = hbpP.effectiveHBP??0;
+    hbpInp.addEventListener("change",ev=>{const v=Math.max(0,parseInt(ev.target.value)||0);local[S.cpActive].players[absIdx].effectiveHBP=v;set({cpLocal:local});});
+    row.appendChild(hbpInp);
     if(!team.hasUsedTransaction&&!hbpP.droppedAt) row.appendChild(h("button",{style:{padding:"4px 8px",fontSize:"11px",borderRadius:"4px",cursor:"pointer",background:"#e84a4a22",border:"1px solid #e84a4a44",color:C.red,whiteSpace:"nowrap"},onClick:()=>{const today=new Date().toISOString().split("T")[0];local[S.cpActive].players[absIdx].droppedAt=today;local[S.cpActive].hasUsedTransaction=true;set({cpLocal:local});}},"Drop"));
     if(hbpP.droppedAt) row.appendChild(h("span",{style:{fontSize:"11px",color:C.muted,whiteSpace:"nowrap"}},"dropped"));
     hbpSec.appendChild(row);
