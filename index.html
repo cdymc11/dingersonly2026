@@ -1548,15 +1548,57 @@ function buildSpotlightModal() {
   const overlay = h("div",{style:{position:"fixed",inset:"0",background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:"1100",padding:"16px"},onClick:()=>set({spotlightPlayer:null,spotlightData:null})});
   const modal = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"16px",padding:"24px",maxWidth:"400px",width:"100%",maxHeight:"85vh",overflowY:"auto"},onClick:e=>e.stopPropagation()});
 
-  // Header
-  modal.appendChild(h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"20px"}},
-    h("div",{},
-      h("div",{style:{color:C.text,fontWeight:"800",fontSize:"20px"}},sp.name),
-      h("div",{style:{color:typeColor,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginTop:"2px"}},sp.type==="hr"?"HR Player":"HBP Player"),
-      h("div",{style:{color:C.muted,fontSize:"12px",marginTop:"2px"}},sp.fantasyTeam)
-    ),
-    h("button",{style:{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"20px",lineHeight:"1"},onClick:()=>set({spotlightPlayer:null,spotlightData:null})},"✕")
-  ));
+  // Header with headshot
+  const playerId = PLAYER_IDS[sp.name] || null;
+  const headshotUrl = playerId ? `https://img.mlbstatic.com/mlb-photos/image/upload/w_180,q_100/v1/people/${playerId}/headshot/67/current` : null;
+  const teamAbbr = (sp.teamAbbr || "").toLowerCase();
+  const teamLogoUrl = teamAbbr ? `https://a.espncdn.com/i/teamlogos/mlb/500/${teamAbbr}.png` : null;
+
+  const hdrRow = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"20px"}});
+
+  // Left: headshot + info
+  const hdrLeft = h("div",{style:{display:"flex",alignItems:"center",gap:"14px"}});
+
+  // Headshot circle
+  const hsWrap = h("div",{style:{position:"relative",flexShrink:"0"}});
+  const hsCircle = h("div",{style:{width:"56px",height:"56px",borderRadius:"50%",background:C.bg,border:`2px solid ${typeColor}44`,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}});
+  if(headshotUrl) {
+    const img = h("img",{style:{width:"100%",height:"100%",objectFit:"cover",objectPosition:"top center"}});
+    img.src = headshotUrl;
+    img.alt = sp.name;
+    img.onerror = () => {
+      hsCircle.innerHTML = "";
+      hsCircle.appendChild(h("div",{style:{fontSize:"22px",color:C.muted}},"👤"));
+    };
+    hsCircle.appendChild(img);
+  } else {
+    hsCircle.appendChild(h("div",{style:{fontSize:"22px",color:C.muted}},"👤"));
+  }
+  hsWrap.appendChild(hsCircle);
+
+  // Team logo badge
+  if(teamLogoUrl) {
+    const badge = h("div",{style:{position:"absolute",bottom:"-2px",right:"-2px",width:"20px",height:"20px",borderRadius:"50%",background:C.card,border:`1px solid ${C.border}`,overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}});
+    const logoImg = h("img",{style:{width:"16px",height:"16px",objectFit:"contain"}});
+    logoImg.src = teamLogoUrl;
+    logoImg.alt = sp.teamAbbr||"";
+    logoImg.onerror = () => { badge.style.display = "none"; };
+    badge.appendChild(logoImg);
+    hsWrap.appendChild(badge);
+  }
+  hdrLeft.appendChild(hsWrap);
+
+  // Name + type + fantasy team
+  const nameCol = h("div",{});
+  nameCol.appendChild(h("div",{style:{color:C.text,fontWeight:"800",fontSize:"18px",lineHeight:"1.1"}},sp.name));
+  nameCol.appendChild(h("div",{style:{color:typeColor,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginTop:"3px"}},sp.type==="hr"?"HR Player":"HBP Player"));
+  nameCol.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginTop:"2px"}},sp.fantasyTeam));
+  hdrLeft.appendChild(nameCol);
+  hdrRow.appendChild(hdrLeft);
+
+  // Close button
+  hdrRow.appendChild(h("button",{style:{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"20px",lineHeight:"1",flexShrink:"0"},onClick:()=>set({spotlightPlayer:null,spotlightData:null})},"✕"));
+  modal.appendChild(hdrRow);
 
   if(spotlightLoading) {
     modal.appendChild(spinner("Loading player stats…"));
