@@ -354,6 +354,7 @@ let S = {
   lastUpdated: null,
   tab: "standings",
   selectedTeam: null,
+  selectedLogo: null,
   spotlightPlayer: null, spotlightData: null, spotlightLoading: false,
   projectedTeam: null,
   hotFilter: "all",
@@ -503,6 +504,33 @@ function playerName(p) {
   return wrap;
 }
 
+
+// ── Team Logos ────────────────────────────────────────────────────────────────
+const TEAM_LOGOS = {
+  // Vinnie Bombinos — white baseball with red stitching + lit fuse
+  0: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 90"><circle cx="44" cy="52" r="28" fill="white" stroke="#ddd" stroke-width="1.5"/><path d="M22 42 Q30 36 38 42 Q30 48 22 54" fill="none" stroke="#e84a4a" stroke-width="2" stroke-linecap="round"/><path d="M50 42 Q58 36 66 42 Q58 48 50 54" fill="none" stroke="#e84a4a" stroke-width="2" stroke-linecap="round"/><circle cx="44" cy="24" r="6" fill="#333" stroke="#222" stroke-width="1.5"/><path d="M44 18 Q50 10 58 7 Q66 4 68 9" fill="none" stroke="#e8c84a" stroke-width="3" stroke-linecap="round"/><ellipse cx="69" cy="7" rx="5" ry="4" fill="#e8c84a"/><ellipse cx="70" cy="5" rx="3" ry="5" fill="orange" transform="rotate(20 70 5)"/><ellipse cx="71" cy="4" rx="2" ry="4" fill="#e84a4a" transform="rotate(30 71 4)"/></svg>`,
+  // Only God Can Judge Me — robed figure with halo swinging bat
+  1: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 90"><path d="M30 72 Q32 58 34 52 L45 48 L56 52 Q58 58 60 72 Z" fill="#e8c4a0" stroke="#c09060" stroke-width="1.5"/><path d="M34 52 Q32 44 34 38 Q36 30 45 28 Q54 30 56 38 Q58 44 56 52 Z" fill="#e8c4a0" stroke="#c09060" stroke-width="1.5"/><circle cx="45" cy="22" r="12" fill="#e8c4a0" stroke="#c09060" stroke-width="1.5"/><path d="M33 22 Q36 14 45 12 Q54 14 57 22 Q54 17 45 16 Q36 17 33 22 Z" fill="white" stroke="#ddd" stroke-width="1"/><path d="M33 22 Q30 26 33 32 Q38 28 45 27 Q52 28 57 32 Q60 26 57 22" fill="white" stroke="#ddd" stroke-width="1"/><ellipse cx="45" cy="13" rx="14" ry="5" fill="#e8c84a" stroke="#c09820" stroke-width="2"/><path d="M36 26 Q40 29 45 28 Q50 29 54 26" fill="#e8b090" stroke="#c07050" stroke-width="1"/><circle cx="40" cy="22" r="2" fill="#555"/><circle cx="50" cy="22" r="2" fill="#555"/><path d="M40 30 Q45 33 50 30" fill="none" stroke="#c07050" stroke-width="1.5"/><line x1="58" y1="58" x2="78" y2="30" stroke="#8B4513" stroke-width="5" stroke-linecap="round"/><ellipse cx="79" cy="28" rx="5" ry="7" fill="#8B4513" transform="rotate(-30 79 28)"/><path d="M56 54 Q60 52 62 56" fill="none" stroke="#c09060" stroke-width="1.5"/></svg>`,
+  // 55 Burgers 55 Ty's — burger + fry box
+  2: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 90"><ellipse cx="34" cy="20" rx="20" ry="10" fill="#e8a84a" stroke="#c07820" stroke-width="1.5"/><rect x="14" y="28" width="40" height="8" rx="1" fill="#4ae89a"/><rect x="14" y="36" width="40" height="10" rx="1" fill="#e84a4a"/><path d="M14 46 Q19 42 24 46 Q29 50 34 46 Q39 42 44 46 Q49 50 54 46" fill="none" stroke="#e8c84a" stroke-width="2"/><rect x="14" y="48" width="40" height="12" rx="4" fill="#e8a84a" stroke="#c07820" stroke-width="1.5"/><rect x="55" y="38" width="26" height="30" rx="3" fill="#e84a4a" stroke="#c03030" stroke-width="1.5"/><rect x="55" y="38" width="26" height="8" rx="3" fill="#c03030"/><text x="68" y="57" text-anchor="middle" font-size="14" fill="white" font-weight="900" font-family="sans-serif">55</text><rect x="58" y="25" width="3" height="16" rx="1" fill="#e8c84a"/><rect x="63" y="22" width="3" height="19" rx="1" fill="#e8c84a"/><rect x="68" y="20" width="3" height="21" rx="1" fill="#e8c84a"/><rect x="73" y="23" width="3" height="18" rx="1" fill="#e8c84a"/></svg>`,
+  // Caglianone — cloud of baseballs + lightning bolt
+  3: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 90"><circle cx="22" cy="28" r="9" fill="white" stroke="#ddd" stroke-width="1"/><path d="M16 25 Q18 22 22 22 Q18 28 16 31" fill="none" stroke="#e84a4a" stroke-width="1.2" stroke-linecap="round"/><path d="M24 25 Q26 22 30 25 Q26 28 24 31" fill="none" stroke="#e84a4a" stroke-width="1.2" stroke-linecap="round"/><circle cx="40" cy="20" r="10" fill="white" stroke="#ddd" stroke-width="1"/><path d="M33 17 Q36 13 40 13 Q36 20 33 23" fill="none" stroke="#e84a4a" stroke-width="1.2" stroke-linecap="round"/><path d="M42 17 Q45 13 49 17 Q45 20 42 23" fill="none" stroke="#e84a4a" stroke-width="1.2" stroke-linecap="round"/><circle cx="60" cy="24" r="9" fill="white" stroke="#ddd" stroke-width="1"/><path d="M54 21 Q57 17 61 17 Q57 24 54 27" fill="none" stroke="#e84a4a" stroke-width="1.2" stroke-linecap="round"/><path d="M63 21 Q66 17 69 21 Q66 24 63 27" fill="none" stroke="#e84a4a" stroke-width="1.2" stroke-linecap="round"/><circle cx="30" cy="42" r="9" fill="white" stroke="#ddd" stroke-width="1"/><path d="M24 39 Q27 35 31 35 Q27 42 24 45" fill="none" stroke="#e84a4a" stroke-width="1.2" stroke-linecap="round"/><path d="M33 39 Q36 35 39 39 Q36 42 33 45" fill="none" stroke="#e84a4a" stroke-width="1.2" stroke-linecap="round"/><circle cx="62" cy="42" r="9" fill="white" stroke="#ddd" stroke-width="1"/><path d="M56 39 Q59 35 63 35 Q59 42 56 45" fill="none" stroke="#e84a4a" stroke-width="1.2" stroke-linecap="round"/><path d="M65 39 Q68 35 71 39 Q68 42 65 45" fill="none" stroke="#e84a4a" stroke-width="1.2" stroke-linecap="round"/><polygon points="48,18 38,52 46,52 36,82 56,46 46,46" fill="#e8c84a" stroke="#c09820" stroke-width="2" stroke-linejoin="round"/></svg>`,
+  // Machado Man Randy Slamage — Macho Man style
+  4: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 90"><rect x="26" y="52" width="38" height="28" rx="4" fill="#e8c84a" stroke="#c09820" stroke-width="1.5"/><circle cx="30" cy="56" r="2" fill="#e84a4a"/><circle cx="36" cy="56" r="2" fill="#e84a4a"/><circle cx="42" cy="56" r="2" fill="#e84a4a"/><circle cx="48" cy="56" r="2" fill="#e84a4a"/><circle cx="54" cy="56" r="2" fill="#e84a4a"/><circle cx="60" cy="56" r="2" fill="#e84a4a"/><rect x="28" y="38" width="34" height="16" rx="3" fill="#e8a84a" stroke="#c07820" stroke-width="1.5"/><path d="M20 40 Q24 36 28 38" fill="none" stroke="#e84a4a" stroke-width="2.5" stroke-linecap="round"/><path d="M70 40 Q66 36 62 38" fill="none" stroke="#4ae89a" stroke-width="2.5" stroke-linecap="round"/><path d="M20 40 L14 50 L20 52 L18 62" stroke="#e84a4a" stroke-width="2.5" stroke-linecap="round" fill="none"/><path d="M70 40 L76 50 L70 52 L72 62" stroke="#4ae89a" stroke-width="2.5" stroke-linecap="round" fill="none"/><circle cx="45" cy="26" r="12" fill="#e8c4a0" stroke="#c09060" stroke-width="1.5"/><ellipse cx="45" cy="18" rx="14" ry="6" fill="#e8c84a" stroke="#c09820" stroke-width="2"/><path d="M31 18 L28 14 L32 16 Z" fill="#e8c84a"/><path d="M59 18 L62 14 L58 16 Z" fill="#e8c84a"/><circle cx="40" cy="24" r="2.5" fill="#555"/><circle cx="50" cy="24" r="2.5" fill="#555"/><path d="M40 30 Q45 34 50 30" fill="none" stroke="#c07050" stroke-width="1.5"/><text x="45" y="88" text-anchor="middle" font-size="7" fill="#e8c84a" font-family="sans-serif" font-weight="900">OHHH YEAH!</text></svg>`,
+  // Doug's Dinger Dynasty — crown on baseball
+  5: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 90"><circle cx="45" cy="56" r="28" fill="white" stroke="#ddd" stroke-width="1.5"/><path d="M20 50 Q28 44 36 50 Q28 56 20 62" fill="none" stroke="#e84a4a" stroke-width="2" stroke-linecap="round"/><path d="M54 50 Q62 44 70 50 Q62 56 54 62" fill="none" stroke="#e84a4a" stroke-width="2" stroke-linecap="round"/><polygon points="22,46 22,28 33,40 45,16 57,40 68,28 68,46" fill="#e8c84a" stroke="#c09820" stroke-width="2" stroke-linejoin="round"/><rect x="20" y="44" width="50" height="8" rx="2" fill="#e8c84a" stroke="#c09820" stroke-width="1.5"/><circle cx="33" cy="34" r="4" fill="#e84a4a"/><circle cx="45" cy="24" r="4" fill="#4ae89a"/><circle cx="57" cy="34" r="4" fill="#6ab0ff"/></svg>`,
+  // Go Diego Go — baseball player running
+  6: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 90"><circle cx="48" cy="14" r="9" fill="#e8c4a0" stroke="#c09060" stroke-width="1.5"/><ellipse cx="48" cy="9" rx="10" ry="5" fill="#1e3a5f" stroke="#0a2040" stroke-width="1.5"/><rect x="34" y="23" width="28" height="24" rx="4" fill="white" stroke="#ddd" stroke-width="1.5"/><text x="48" y="39" text-anchor="middle" font-size="11" fill="#e84a4a" font-weight="900" font-family="sans-serif">D</text><rect x="34" y="47" width="28" height="22" rx="2" fill="#e84a4a" stroke="#c03030" stroke-width="1.5"/><path d="M34 28 L22 38 L18 52" stroke="white" stroke-width="3" stroke-linecap="round" fill="none"/><ellipse cx="15" cy="54" rx="6" ry="4" fill="#8B4513" transform="rotate(-20 15 54)"/><path d="M62 28 L70 32 L74 20" stroke="white" stroke-width="3" stroke-linecap="round" fill="none"/><line x1="36" y1="69" x2="34" y2="82" stroke="#1e3a5f" stroke-width="2.5" stroke-linecap="round"/><line x1="62" y1="69" x2="60" y2="82" stroke="#1e3a5f" stroke-width="2.5" stroke-linecap="round"/><ellipse cx="32" cy="84" rx="6" ry="3" fill="white" stroke="#ddd" stroke-width="1.5"/><ellipse cx="58" cy="84" rx="6" ry="3" fill="white" stroke="#ddd" stroke-width="1.5"/></svg>`,
+  // Help Stebro — sinking into first base
+  7: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 90"><rect x="20" y="62" width="50" height="22" rx="4" fill="white" stroke="#ddd" stroke-width="2"/><text x="45" y="77" text-anchor="middle" font-size="12" fill="#1e3a5f" font-weight="900" font-family="sans-serif">1B</text><circle cx="45" cy="28" r="10" fill="#e8c4a0" stroke="#c09060" stroke-width="1.5"/><ellipse cx="45" cy="22" rx="11" ry="5" fill="#1e3a5f" stroke="#0a2040" stroke-width="1.5"/><rect x="34" y="38" width="22" height="20" rx="3" fill="white" stroke="#ddd" stroke-width="1.5"/><text x="45" y="52" text-anchor="middle" font-size="10" fill="#e84a4a" font-weight="900" font-family="sans-serif">S</text><rect x="34" y="58" width="22" height="8" rx="1" fill="#e84a4a"/><path d="M34 42 L22 36 L18 46" stroke="white" stroke-width="3" stroke-linecap="round" fill="none"/><path d="M56 42 L62 30 L68 24" stroke="#e84a4a" stroke-width="2.5" stroke-linecap="round" fill="none"/><path d="M60 22 L72 20 L68 30 Z" fill="#e84a4a"/><text x="58" y="18" font-size="8" fill="#e84a4a" font-family="sans-serif" font-weight="700">HELP!</text></svg>`,
+};
+
+function teamLogoDataUrl(teamId) {
+  const svg = TEAM_LOGOS[teamId];
+  if(!svg) return null;
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+}
+
 // ── Rank info builder (tie-aware) ─────────────────────────────────────────────
 function buildRankInfo(scores) {
   const n = scores.length;
@@ -552,9 +580,20 @@ function buildStandings() {
     wrapper.classList.add("row-hover");
     const row = h("div",{style:{display:"grid",gridTemplateColumns:"40px 1fr 60px",alignItems:"center",padding:"14px 20px 8px"}},
       h("span",{style:{fontSize:rankSize(i),color:C.muted,fontWeight:"700"}}, rankIcon(i)),
-      h("div",{},
-        h("div",{style:{color:C.text,fontWeight:"600",fontSize:"15px"}},team.name),
-        team.owner?h("div",{style:{color:C.muted,fontSize:"11px"}},team.owner):null
+      h("div",{style:{display:"flex",alignItems:"center",gap:"10px"}},
+        (() => {
+          const logoUrl = teamLogoDataUrl(team.id);
+          if(!logoUrl) return null;
+          const img = document.createElement("img");
+          img.src = logoUrl;
+          img.style.cssText = "width:32px;height:32px;border-radius:50%;border:1px solid #1e3a5f;cursor:pointer;flex-shrink:0;";
+          img.onclick = (e) => { e.stopPropagation(); set({selectedLogo:team.id}); };
+          return img;
+        })(),
+        h("div",{},
+          h("div",{style:{color:C.text,fontWeight:"600",fontSize:"15px"}},team.name),
+          team.owner?h("div",{style:{color:C.muted,fontSize:"11px"}},team.owner):null
+        )
       ),
       h("span",{style:{color:C.accent,fontWeight:"800",fontSize:"22px",textAlign:"right",fontFamily:"'Bebas Neue', sans-serif"}},teamScore)
     );
@@ -1901,6 +1940,23 @@ function buildCommish() {
 }
 
 // ── Main render ───────────────────────────────────────────────────────────────
+
+function buildLogoModal() {
+  const teamId = S.selectedLogo;
+  const team = S.teams.find(t=>t.id===teamId);
+  if(team === undefined) return null;
+  const logoUrl = teamLogoDataUrl(teamId);
+  const overlay = h("div",{style:{position:"fixed",inset:"0",background:"rgba(0,0,0,0.92)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",zIndex:"1200",padding:"24px"},onClick:()=>set({selectedLogo:null})});
+  const img = document.createElement("img");
+  img.src = logoUrl;
+  img.style.cssText = "width:220px;height:220px;border-radius:20px;border:2px solid #1e3a5f;margin-bottom:20px;";
+  overlay.appendChild(img);
+  overlay.appendChild(h("div",{style:{color:"#f0f4ff",fontWeight:"800",fontSize:"20px",textAlign:"center",marginBottom:"6px"}},team.name));
+  overlay.appendChild(h("div",{style:{color:"#6b7fa3",fontSize:"13px",textAlign:"center",marginBottom:"24px"}},team.owner||""));
+  overlay.appendChild(h("div",{style:{color:"#6b7fa3",fontSize:"12px"}},"Tap anywhere to close"));
+  return overlay;
+}
+
 function render() {
   const app = document.getElementById("app");
   app.innerHTML="";
@@ -1957,6 +2013,7 @@ function render() {
   else if(S.tab==="debug") body.appendChild(buildDebug());
   app.appendChild(body);
 
+  if(S.selectedLogo !== null) app.appendChild(buildLogoModal());
   if(S.selectedTeam) app.appendChild(buildTeamModal(S.selectedTeam));
   if(S.spotlightPlayer) app.appendChild(buildSpotlightModal());
   if(S.projectedTeam) app.appendChild(buildProjectedTeamModal());
