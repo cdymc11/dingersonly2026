@@ -300,7 +300,7 @@ const PLAYER_IDS = {
   "Pete Alonso":         624413,
   "Julio Rodriguez":     677594,
   "Austin Riley":        663586,
-  "Michael Busch":       686668,
+  "Michael Busch":       683737,
   "Corey Seager":        608369,
   "Elly De La Cruz":     682829,
   "Caleb Durbin":        702332,
@@ -1604,10 +1604,8 @@ function buildSpotlightModal() {
 
   // Header with headshot
   const playerId = PLAYER_IDS[sp.name] || null;
-  const HEADSHOT_OVERRIDES = {
-    "Michael Busch": `https://img.mlbstatic.com/mlb-photos/image/upload/w_180,q_100/v1/people/686668/headshot/silo/current`,
-  };
-  const headshotUrl = HEADSHOT_OVERRIDES[sp.name] || (playerId ? `https://img.mlbstatic.com/mlb-photos/image/upload/w_180,q_100/v1/people/${playerId}/headshot/67/current` : null);
+  const headshotUrl = playerId ? `https://img.mlbstatic.com/mlb-photos/image/upload/w_180,q_100/v1/people/${playerId}/headshot/67/current` : null;
+  const headshotUrl = playerId ? `https://img.mlbstatic.com/mlb-photos/image/upload/w_180,q_100/v1/people/${playerId}/headshot/67/current` : null;
   const teamAbbr = (sp.teamAbbr || "").toLowerCase();
   const teamLogoUrl = teamAbbr ? `https://a.espncdn.com/i/teamlogos/mlb/500/${teamAbbr}.png` : null;
 
