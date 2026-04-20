@@ -1522,92 +1522,6 @@ async function runDebug() {
 }
 
 // ── Rosters ───────────────────────────────────────────────────────────────────
-function buildRosters() {
-  const sorted = [...S.teams].sort((a,b)=>score(b)-score(a));
-  const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
-
-  wrap.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"20px"}},
-    h("span",{style:{fontSize:"20px"}},"📋"),
-    h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Team Rosters")
-  ));
-
-  sorted.forEach((team,ti)=>{
-    const totalScore = score(team);
-    const hrPlayers = (team.players||[]).filter(p=>p.type==="hr");
-    const hbpPlayer = (team.players||[]).find(p=>p.type==="hbp");
-
-    const card = h("div",{style:{background:C.card,border:`1px solid ${ti===0?C.accent+"44":C.border}`,borderRadius:"12px",marginBottom:"16px",overflow:"hidden"}});
-
-    // Team header
-    const thdr = h("div",{style:{background:ti===0?`${C.accent}11`:C.surface,padding:"14px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${C.border}`}});
-    const tinfo = h("div",{},
-      h("div",{style:{color:C.text,fontWeight:"800",fontSize:"16px"}},team.name),
-      team.owner?h("div",{style:{color:C.muted,fontSize:"12px",marginTop:"2px"}},team.owner):null
-    );
-    const tscore = h("div",{style:{textAlign:"right"}},
-      h("div",{style:{color:C.accent,fontFamily:"'Bebas Neue', sans-serif",fontSize:"28px",fontWeight:"800",lineHeight:"1"}},totalScore),
-      h("div",{style:{color:C.muted,fontSize:"10px",textTransform:"uppercase",letterSpacing:"0.08em"}},"Total Pts")
-    );
-    thdr.append(tinfo,tscore);
-    card.appendChild(thdr);
-
-    // HR players
-    hrPlayers.forEach((p,i)=>{
-      const pts = p.effectiveHR||0;
-      const row = h("div",{class:"row-hover",style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 18px",borderBottom:`1px solid ${C.border}22`,opacity:p.droppedAt?"0.5":"1",background:"transparent",cursor:"pointer"},onClick:()=>openSpotlight(p.name,team.name,p.type)});
-      const left = h("div",{style:{display:"flex",flexDirection:"column",gap:"2px"}});
-      const nameEl = h("span",{style:{color:C.text,fontSize:"14px",fontWeight:"600"}},p.name);
-      if(p.teamAbbr) nameEl.appendChild(h("span",{style:{color:C.muted,fontWeight:"400"}},` (${p.teamAbbr})`));
-      left.appendChild(nameEl);
-      const tags = h("div",{style:{display:"flex",gap:"6px",alignItems:"center",marginTop:"2px"}});
-      tags.appendChild(badge("HR",C.red));
-      if(p.droppedAt) tags.appendChild(h("span",{style:{color:C.muted,fontSize:"10px"}},`dropped ${fmtDate(p.droppedAt)}`));
-      if(p.addedAt) tags.appendChild(h("span",{style:{color:C.green,fontSize:"10px"}},`added ${fmtDate(p.addedAt)}`));
-      left.appendChild(tags);
-      const right = h("div",{style:{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"2px"}});
-      right.appendChild(h("span",{style:{color:C.red,fontFamily:"'Bebas Neue', sans-serif",fontSize:"24px",fontWeight:"800",lineHeight:"1"}},pts));
-      right.appendChild(h("span",{style:{color:C.muted,fontSize:"10px",textTransform:"uppercase"}},pts===1?"point":"points"));
-      row.append(left,right);
-      card.appendChild(row);
-    });
-
-    // HBP player
-    if(hbpPlayer){
-      const pts = hbpPlayer.effectiveHBP||0;
-      const row = h("div",{class:"row-hover",style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 18px",opacity:hbpPlayer.droppedAt?"0.5":"1",background:`${C.green}08`,borderTop:`1px solid ${C.border}22`,cursor:"pointer"},onClick:()=>openSpotlight(hbpPlayer.name,team.name,hbpPlayer.type)});
-      const left = h("div",{style:{display:"flex",flexDirection:"column",gap:"2px"}});
-      const nameEl = h("span",{style:{color:C.text,fontSize:"14px",fontWeight:"600"}},hbpPlayer.name);
-      if(hbpPlayer.teamAbbr) nameEl.appendChild(h("span",{style:{color:C.muted,fontWeight:"400"}},` (${hbpPlayer.teamAbbr})`));
-      left.appendChild(nameEl);
-      const tags = h("div",{style:{display:"flex",gap:"6px",alignItems:"center",marginTop:"2px"}});
-      tags.appendChild(badge("HBP",C.green));
-      if(hbpPlayer.droppedAt) tags.appendChild(h("span",{style:{color:C.muted,fontSize:"10px"}},`dropped ${fmtDate(hbpPlayer.droppedAt)}`));
-      if(hbpPlayer.addedAt) tags.appendChild(h("span",{style:{color:C.green,fontSize:"10px"}},`added ${fmtDate(hbpPlayer.addedAt)}`));
-      left.appendChild(tags);
-      const right = h("div",{style:{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:"2px"}});
-      right.appendChild(h("span",{style:{color:C.green,fontFamily:"'Bebas Neue', sans-serif",fontSize:"24px",fontWeight:"800",lineHeight:"1"}},pts));
-      right.appendChild(h("span",{style:{color:C.muted,fontSize:"10px",textTransform:"uppercase"}},pts===1?"point":"points"));
-      row.append(left,right);
-      card.appendChild(row);
-    }
-
-    // Team total bar
-    const allScores = S.teams.map(t=>score(t));
-    const maxScore = Math.max(...allScores,1);
-    const pct = (totalScore/maxScore)*100;
-    const barWrap = h("div",{style:{padding:"10px 18px",borderTop:`1px solid ${C.border}22`,background:C.surface}});
-    const barTrack = h("div",{style:{height:"4px",background:C.bg,borderRadius:"2px",overflow:"hidden"}});
-    barTrack.appendChild(h("div",{style:{height:"100%",width:`${pct}%`,background:`linear-gradient(90deg,${C.accent},${C.red})`,borderRadius:"2px",transition:"width 0.6s ease"}}));
-    barWrap.appendChild(barTrack);
-    card.appendChild(barWrap);
-
-    wrap.appendChild(card);
-  });
-
-  return wrap;
-}
-
-// ── Player Spotlight ──────────────────────────────────────────────────────────
 async function openSpotlight(playerName, fantasyTeam, type) {
   set({spotlightPlayer:{name:playerName, fantasyTeam, type}, spotlightData:null, spotlightLoading:true});
   const playerId = PLAYER_IDS[playerName];
@@ -1799,36 +1713,40 @@ function buildTeamModal(team) {
   const overlay = h("div",{style:{position:"fixed",inset:"0",background:"rgba(0,0,0,0.75)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:"1000",padding:"16px"},onClick:()=>set({selectedTeam:null})});
   const modal = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"16px",padding:"28px",maxWidth:"480px",width:"100%",maxHeight:"90vh",overflowY:"auto"},onClick:e=>e.stopPropagation()});
   const sc = score(team);
-  modal.appendChild(h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"20px"}},
+  modal.appendChild(h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"4px"}},
     h("div",{},h("h2",{style:{color:C.text,fontSize:"22px",fontWeight:"800",margin:"0"}},team.name),team.owner?h("p",{style:{color:C.muted,fontSize:"13px",margin:"4px 0 0"}},team.owner):null),
     h("div",{style:{textAlign:"right"}},h("div",{style:{color:C.accent,fontSize:"36px",fontWeight:"800",fontFamily:"'Bebas Neue', sans-serif",lineHeight:"1"}},sc),h("div",{style:{color:C.muted,fontSize:"11px",textTransform:"uppercase",letterSpacing:"0.08em"}},"Total Score"))
   ));
+  modal.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",marginBottom:"20px"}},"Tap a player to see their stats"));
   const hrPlayers=(team.players||[]).filter(p=>p.type==="hr");
   const hbpPlayer=(team.players||[]).find(p=>p.type==="hbp");
   const hrSec=h("div",{style:{marginBottom:"16px"}});
   hrSec.appendChild(h("div",{style:{color:C.red,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"8px"}},"HR Players"));
-  hrPlayers.length===0?hrSec.appendChild(h("div",{style:{color:C.muted,fontSize:"13px"}},"No players yet.")):hrPlayers.forEach(p=>{
-    const row=h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",borderBottom:`1px solid ${C.border}22`,opacity:p.droppedAt?"0.55":"1"}});
+  const hrList=h("div",{style:{background:C.bg,borderRadius:"10px",overflow:"hidden"}});
+  hrPlayers.length===0?hrList.appendChild(h("div",{style:{color:C.muted,fontSize:"13px",padding:"10px"}},"No players yet.")):hrPlayers.forEach((p,i)=>{
+    const row=h("div",{class:"row-hover",style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 14px",borderBottom:i<hrPlayers.length-1?`1px solid ${C.border}22`:"none",opacity:p.droppedAt?"0.55":"1",cursor:"pointer"},onClick:()=>openSpotlight(p.name,team.name,p.type)});
     const nd=h("div",{},playerName(p));
     if(p.droppedAt) nd.appendChild(h("span",{style:{color:C.muted,fontSize:"11px",marginLeft:"6px"}},`(dropped ${fmtDate(p.droppedAt)})`));
     if(p.addedAt) nd.appendChild(h("span",{style:{color:C.green,fontSize:"11px",marginLeft:"6px"}},`(added ${fmtDate(p.addedAt)})`));
     const sd=h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
     sd.appendChild(badge("HR",C.red));
     sd.appendChild(h("span",{style:{color:C.red,fontWeight:"800",fontSize:"20px",fontFamily:"'Bebas Neue', sans-serif",minWidth:"28px",textAlign:"right"}},p.effectiveHR||0));
-    row.append(nd,sd); hrSec.appendChild(row);
+    row.append(nd,sd); hrList.appendChild(row);
   });
+  hrSec.appendChild(hrList);
   modal.appendChild(hrSec);
   if(hbpPlayer){
     const hs=h("div",{style:{marginBottom:"16px"}});
     hs.appendChild(h("div",{style:{color:C.green,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"8px"}},"HBP Player"));
-    const row=h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 0",opacity:hbpPlayer.droppedAt?"0.55":"1"}});
+    const hbpList=h("div",{style:{background:C.bg,borderRadius:"10px",overflow:"hidden"}});
+    const row=h("div",{class:"row-hover",style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 14px",opacity:hbpPlayer.droppedAt?"0.55":"1",cursor:"pointer"},onClick:()=>openSpotlight(hbpPlayer.name,team.name,hbpPlayer.type)});
     const nd=h("div",{},playerName(hbpPlayer));
     if(hbpPlayer.droppedAt) nd.appendChild(h("span",{style:{color:C.muted,fontSize:"11px",marginLeft:"6px"}},`(dropped ${fmtDate(hbpPlayer.droppedAt)})`));
     if(hbpPlayer.addedAt) nd.appendChild(h("span",{style:{color:C.green,fontSize:"11px",marginLeft:"6px"}},`(added ${fmtDate(hbpPlayer.addedAt)})`));
     const sd=h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
     sd.appendChild(badge("HBP",C.green));
     sd.appendChild(h("span",{style:{color:C.green,fontWeight:"800",fontSize:"20px",fontFamily:"'Bebas Neue', sans-serif",minWidth:"28px",textAlign:"right"}},hbpPlayer.effectiveHBP||0));
-    row.append(nd,sd); hs.appendChild(row); modal.appendChild(hs);
+    row.append(nd,sd); hbpList.appendChild(row); hs.appendChild(hbpList); modal.appendChild(hs);
   }
   if(team.hasUsedTransaction) modal.appendChild(h("div",{style:{padding:"10px 14px",background:`${C.accent}11`,border:`1px solid ${C.accent}33`,borderRadius:"8px",fontSize:"12px",color:C.muted,marginBottom:"16px"}},"⚡ Transaction used — roster locked"));
   modal.appendChild(h("button",{style:{width:"100%",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"14px"},onClick:()=>set({selectedTeam:null})},"Close"));
@@ -1974,7 +1892,7 @@ function render() {
   app.appendChild(header);
 
   // Tabs
-  const tabs=[{id:"standings",label:"🏆 Standings"},{id:"rosters",label:"📋 Rosters"},{id:"leaderboard",label:"📊 Leaderboard"},{id:"projected",label:"🔮 Projected"},{id:"scores",label:"⚾ Scores"},{id:"recent",label:"📅 Recent"},{id:"history",label:"📈 History"},{id:"rules",label:"📖 Rules"},...(S.commishUnlocked?[{id:"debug",label:"🔍 Debug"}]:[])];
+  const tabs=[{id:"standings",label:"🏆 Standings"},{id:"leaderboard",label:"📊 Leaderboard"},{id:"projected",label:"🔮 Projected"},{id:"scores",label:"⚾ Scores"},{id:"recent",label:"📅 Recent"},{id:"history",label:"📈 History"},{id:"rules",label:"📖 Rules"},...(S.commishUnlocked?[{id:"debug",label:"🔍 Debug"}]:[])];
   const tabBar=h("div",{style:{borderBottom:`1px solid ${C.border}`,background:C.surface}});
   const tabInner=h("div",{style:{maxWidth:"640px",margin:"0 auto",display:"flex",padding:"0 16px",overflowX:"auto"}});
   tabs.forEach(tab=>{
@@ -1987,7 +1905,6 @@ function render() {
   // Body
   const body=h("div",{style:{maxWidth:"640px",margin:"0 auto",padding:"24px 16px"}});
   if(S.tab==="standings") body.appendChild(buildStandings());
-  else if(S.tab==="rosters") body.appendChild(buildRosters());
   else if(S.tab==="leaderboard") body.appendChild(buildLeaderboard());
   else if(S.tab==="projected") body.appendChild(buildProjected());
 
