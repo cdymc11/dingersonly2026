@@ -941,21 +941,23 @@ function buildProjected() {
 
       // For transaction adds, measure pace from addedAt date not season start
       const playerStart = p.addedAt ? new Date(p.addedAt + "T12:00:00") : seasonStart;
-      const playerDaysPassed = Math.max(1, Math.floor((today - playerStart) / (1000*60*60*24)));
+      const playerDaysPassed = Math.max(0, Math.floor((today - playerStart) / (1000*60*60*24)));
       const playerGamesPlayed = Math.min(Math.round(playerDaysPassed * 0.92), TOTAL_GAMES);
+      // If just added with no effective stats yet, use pure preseason projection
+      const usePreseasonOnly = p.addedAt && actual === 0 && playerGamesPlayed < 3;
 
       if(preseason === null) {
-        // No preseason data — fall back to pure pace
         const rate = actual / Math.max(playerGamesPlayed, 1);
         projectedScore += rate * gamesRemaining;
+      } else if(usePreseasonOnly) {
+        // Newly added player — project purely from preseason rate
+        const preseasonRate = preseason / TOTAL_GAMES;
+        projectedScore += preseasonRate * gamesRemaining;
       } else {
-        // Blended: pace-based remaining + preseason-based remaining
         const paceRate = actual / Math.max(playerGamesPlayed, 1);
         const paceRemaining = paceRate * gamesRemaining;
-        // Preseason remaining = full season proj - already earned at preseason rate
         const preseasonRate = preseason / TOTAL_GAMES;
         const preseasonRemaining = preseasonRate * gamesRemaining;
-        // Blend
         projectedScore += (paceWeight * paceRemaining) + (projWeight * preseasonRemaining);
       }
     });
@@ -1750,12 +1752,16 @@ function buildProjectedTeamModal() {
     const pSeasonStart = new Date("2026-03-26");
     const pToday = new Date();
     const pPlayerStart = p.addedAt ? new Date(p.addedAt + "T12:00:00") : pSeasonStart;
-    const pDaysPassed = Math.max(1, Math.floor((pToday - pPlayerStart) / (1000*60*60*24)));
+    const pDaysPassed = Math.max(0, Math.floor((pToday - pPlayerStart) / (1000*60*60*24)));
     const pPlayerGamesPlayed = Math.min(Math.round(pDaysPassed * 0.92), TOTAL_GAMES);
+    const usePreseasonOnly = p.addedAt && actual === 0 && pPlayerGamesPlayed < 3;
     let projFinal;
     if(preseason === null) {
       const rate = actual / Math.max(pPlayerGamesPlayed, 1);
       projFinal = actual + rate * gamesRemaining;
+    } else if(usePreseasonOnly) {
+      const preseasonRate = preseason / TOTAL_GAMES;
+      projFinal = actual + preseasonRate * gamesRemaining;
     } else {
       const paceRate = actual / Math.max(pPlayerGamesPlayed, 1);
       const paceRemaining = paceRate * gamesRemaining;
