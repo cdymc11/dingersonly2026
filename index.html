@@ -390,21 +390,20 @@ const NAME_CORRECTIONS = {
 };
 
 // Listen to Firebase for real-time updates
-// We always use HARDCODED_TEAMS for names/structure, but merge saved stats on top
+// Merge Firebase data on top of HARDCODED_TEAMS structure
 onSnapshot(leagueRef, snap => {
   if(snap.exists()) {
     const data = snap.data();
     if(data.teams?.length > 0) {
-      // Build a lookup of saved player stats keyed by player ID or position
       const merged = JSON.parse(JSON.stringify(HARDCODED_TEAMS));
       merged.forEach(team => {
         const saved = data.teams.find(t => t.id === team.id);
         if(!saved) return;
-        // Copy transaction/stat fields from saved team
         team.hasUsedTransaction = saved.hasUsedTransaction || false;
-        // Match players by index (same draft order), copy stats over
-        team.players.forEach((p, i) => {
-          const sp = saved.players?.[i];
+
+        // Match players by NAME not index — handles transactions correctly
+        team.players.forEach(p => {
+          const sp = saved.players?.find(s => s.name === p.name);
           if(!sp) return;
           if(p.type === "hr") {
             p.effectiveHR = sp.effectiveHR || 0;
@@ -421,14 +420,16 @@ onSnapshot(leagueRef, snap => {
             if(sp.teamAbbr) p.teamAbbr = sp.teamAbbr;
           }
         });
-        // Also append any added (transaction) players beyond the base 8
-        if(saved.players?.length > team.players.length) {
-          const extra = saved.players.slice(team.players.length);
-          extra.forEach(ep => {
+
+        // Append transaction players (names not in hardcoded roster)
+        const hardcodedNames = new Set(team.players.map(p => p.name));
+        (saved.players || []).forEach(sp => {
+          if(!hardcodedNames.has(sp.name)) {
+            const ep = { ...sp };
             ep.name = NAME_CORRECTIONS[ep.name] || ep.name;
             team.players.push(ep);
-          });
-        }
+          }
+        });
       });
       set({ teams: merged, lastUpdated: data.lastUpdated||null });
       maybeAutoSnapshot();
