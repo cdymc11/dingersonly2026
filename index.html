@@ -632,8 +632,9 @@ function buildLeaderboard() {
   wrap.appendChild(filterRow);
   const all=[];
   S.teams.forEach(team=>(team.players||[]).filter(p=>p.name?.trim()).forEach(p=>{
+    if(p.droppedAt) return; // skip dropped players
     const pts = p.type==="hr" ? (p.effectiveHR||0) : (p.effectiveHBP||0);
-    all.push({name:p.name, teamAbbr:p.teamAbbr, pts, type:p.type, fantasyTeam:team.name, dropped:!!p.droppedAt, added:!!p.addedAt});
+    all.push({name:p.name, teamAbbr:p.teamAbbr, pts, type:p.type, fantasyTeam:team.name, dropped:false, added:!!p.addedAt});
   }));
   let filtered, title, statLabel;
   if(filter==="pts") {
@@ -823,6 +824,7 @@ async function loadYesterday() {
   for(const team of S.teams) {
     for(const p of (team.players||[])) {
       if(!p.name?.trim()) continue;
+      if(p.droppedAt) continue; // skip dropped players
       const s = await fetchStats(p.name); if(!s?.playerId) continue;
       const y = await fetchYesterday(s.playerId); if(!y) continue;
       if(p.type==="hr"&&y.hr>0) hits.push({name:p.name,teamAbbr:s.teamAbbr,fantasyTeam:team.name,stat:y.hr,type:"hr"});
@@ -1119,6 +1121,7 @@ function buildScores() {
         S.teams.forEach(ft => {
           const hcTeam = HARDCODED_TEAMS.find(hc => hc.id === ft.id);
           (ft.players||[]).forEach((p,i) => {
+            if(p.droppedAt) return; // skip dropped players
             const abbr = p.teamAbbr || hcTeam?.players?.[i]?.teamAbbr || null;
             if(abbr === game.awayAbbr) awayPlayers.push({name:p.name, fantasy:ft.name});
             else if(abbr === game.homeAbbr) homePlayers.push({name:p.name, fantasy:ft.name});
