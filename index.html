@@ -1527,10 +1527,46 @@ function buildRules() {
     {num:"2", text:"+3 HR bonus if your dad pitches for you."},
   ]));
 
+   // Transaction Log
+  wrap.appendChild(h("div",{style:{marginTop:"28px"}}));
+  const txTitle = h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"12px"}});
+  txTitle.appendChild(h("span",{style:{fontSize:"18px"}},"🔄"));
+  txTitle.appendChild(h("h3",{style:{margin:"0",fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.12em",color:C.muted}},"Transaction Log"));
+  wrap.appendChild(txTitle);
+
+  const txData = [
+    { date:"Apr 22", team:"Caglianone In A Million", dropped:"Spencer Torkelson", droppedStat:"0 HR", added:"Jordan Walker", addedBaseline:"8 HR at time of add" },
+    { date:"May 2",  team:"Doug's Dinger Dynasty",   dropped:"Wyatt Langford",    droppedStat:"1 HR", added:"Sal Stewart",    addedBaseline:"9 HR at time of add" },
+    { date:"May 2",  team:"Help, Stepbro, I'm Stuck on First Base!", dropped:"Willy Adames", droppedStat:"3 HR", added:"Spencer Torkelson", addedBaseline:"5 HR at time of add" },
+  ];
+
+  const txCard = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",overflow:"hidden"}});
+  txData.forEach((tx, i) => {
+    const row = h("div",{style:{padding:"14px 18px",borderBottom:i<txData.length-1?`1px solid ${C.border}33`:"none"}});
+    row.appendChild(h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}},
+      h("div",{style:{color:C.text,fontWeight:"700",fontSize:"13px"}},tx.team),
+      h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"600"}},tx.date)
+    ));
+    row.appendChild(h("div",{style:{display:"flex",gap:"8px",alignItems:"center",marginBottom:"4px"}},
+      h("span",{style:{color:C.red,fontSize:"11px",fontWeight:"700",background:C.red+"22",border:`1px solid ${C.red}44`,borderRadius:"4px",padding:"2px 7px"}},"DROP"),
+      h("span",{style:{color:C.text,fontSize:"12px"}},tx.dropped),
+      h("span",{style:{color:C.muted,fontSize:"11px"}},"·"),
+      h("span",{style:{color:C.muted,fontSize:"11px"}},tx.droppedStat)
+    ));
+    row.appendChild(h("div",{style:{display:"flex",gap:"8px",alignItems:"center"}},
+      h("span",{style:{color:C.green,fontSize:"11px",fontWeight:"700",background:C.green+"22",border:`1px solid ${C.green}44`,borderRadius:"4px",padding:"2px 7px"}},"ADD"),
+      h("span",{style:{color:C.text,fontSize:"12px"}},tx.added),
+      h("span",{style:{color:C.muted,fontSize:"11px"}},"·"),
+      h("span",{style:{color:C.muted,fontSize:"11px"}},tx.addedBaseline)
+    ));
+    txCard.appendChild(row);
+  });
+  wrap.appendChild(txCard);
+
   return wrap;
 }
 
-// ── Debug ─────────────────────────────────────────────────────────────────────
+//// ── Debug ─────────────────────────────────────────────────────────────────────
 function buildDebug() {
   const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
   wrap.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"8px",marginBottom:"6px"}},
