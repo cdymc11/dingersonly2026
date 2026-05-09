@@ -403,7 +403,7 @@ onSnapshot(leagueRef, snap => {
         if(!saved) return;
         team.hasUsedTransaction = saved.hasUsedTransaction || false;
 
-        // Match players by NAME not index — handles transactions correctly
+        // Match hardcoded players by name, copy stats from Firebase
         team.players.forEach(p => {
           const sp = saved.players?.find(s => s.name === p.name);
           if(!sp) return;
@@ -423,13 +423,15 @@ onSnapshot(leagueRef, snap => {
           }
         });
 
-        // Append transaction players (names not in hardcoded roster)
-        const hardcodedNames = new Set(team.players.map(p => p.name));
+        // CRITICAL: Preserve ALL transaction players from Firebase
+        // These are players in saved data that are NOT in HARDCODED_TEAMS for this team
+        const hardcodedNames = new Set(
+          HARDCODED_TEAMS.find(hc => hc.id === team.id)?.players.map(p => p.name) || []
+        );
         (saved.players || []).forEach(sp => {
           if(!hardcodedNames.has(sp.name)) {
-            const ep = { ...sp };
-            ep.name = NAME_CORRECTIONS[ep.name] || ep.name;
-            team.players.push(ep);
+            // This is a transaction player — always keep it from Firebase verbatim
+            team.players.push({ ...sp });
           }
         });
       });
@@ -441,10 +443,12 @@ onSnapshot(leagueRef, snap => {
 
 async function saveToFirebase(teams) {
   const now = new Date().toISOString();
-  // Always enforce hardcoded team names before saving
+  // Enforce hardcoded team names/owners but preserve all players including transactions
   const corrected = teams.map(t => {
     const hc = HARDCODED_TEAMS.find(h => h.id === t.id);
-    return hc ? { ...t, name: hc.name, owner: hc.owner } : t;
+    if(!hc) return t;
+    // Keep full players array as-is (includes transaction adds/drops)
+    return { ...t, name: hc.name, owner: hc.owner };
   });
   await setDoc(leagueRef, { teams: corrected, lastUpdated: now });
   set({ teams: corrected, lastUpdated: now });
