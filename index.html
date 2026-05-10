@@ -2031,7 +2031,22 @@ function buildCommish() {
     set({cpLocal:updated,cpRefreshing:false,cpStatus:"✓ Stats updated!"});
     setTimeout(()=>set({cpStatus:""}),3000);
   }},S.cpRefreshing?"⟳ Refreshing…":"⟳ Refresh Live Stats"));
-  actions.appendChild(h("button",{style:{padding:"10px 18px",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"13px",background:C.accent,border:"none",color:"#000"},onClick:async()=>{await saveToFirebase(local);set({cpStatus:"✓ Saved!"});setTimeout(()=>set({cpStatus:""}),2000);}},  "💾 Save"));
+  actions.appendChild(h("button",{style:{padding:"10px 18px",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"13px",background:C.accent,border:"none",color:"#000"},onClick:async()=>{
+        // Protect addedAt/hrBaseline/hbpBaseline/droppedAt — never overwrite if set in Firebase
+        const toSave = JSON.parse(JSON.stringify(local));
+        toSave.forEach(team => {
+          const fbTeam = S.teams.find(t => t.id === team.id);
+          if(!fbTeam) return;
+          team.players.forEach(p => {
+            const fbP = fbTeam.players.find(fp => fp.name === p.name);
+            if(!fbP) return;
+            if(fbP.addedAt) p.addedAt = fbP.addedAt;
+            if(fbP.droppedAt) p.droppedAt = fbP.droppedAt;
+            if(fbP.hrBaseline !== null && fbP.hrBaseline !== undefined) p.hrBaseline = fbP.hrBaseline;
+            if(fbP.hbpBaseline !== null && fbP.hbpBaseline !== undefined) p.hbpBaseline = fbP.hbpBaseline;
+          });
+        });
+        await saveToFirebase(toSave);set({cpStatus:"✓ Saved!"});setTimeout(()=>set({cpStatus:""}),2000);}},  "💾 Save"));
   panel.appendChild(actions);
 
   // History backfill section
