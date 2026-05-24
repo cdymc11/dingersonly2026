@@ -74,7 +74,7 @@
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, setDoc, onSnapshot, collection, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import { getFirestore, doc, setDoc, deleteDoc, onSnapshot, collection, getDocs, orderBy, query } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 // ── Firebase ──────────────────────────────────────────────────────────────────
 const firebaseConfig = {
@@ -89,6 +89,7 @@ const firebaseApp = initializeApp(firebaseConfig);
 const db = getFirestore(firebaseApp);
 const leagueRef = doc(db, "league", "data");
 const historyCol = collection(db, "history");
+const transactionsCol = collection(db, "transactions");
 
 // Save a weekly snapshot — called automatically on Mondays & manually by commish
 async function saveHistorySnapshot(label) {
@@ -364,6 +365,7 @@ let S = {
   projectedTeam: null,
   hotFilter: "all",
   historyWeeks: null, historyLoading: false, historyWeekIdx: 0,
+  transactions: [], // [{id, teamId, droppedPlayer, droppedAt, droppedStat, addedPlayer, addedAt, hrBaseline, hbpBaseline, type}]
   commishInput: "", commishUnlocked: false, showCommish: false, pwError: false,
   refreshing: false, refreshStatus: "",
   // commissioner panel
@@ -393,50 +395,109 @@ const NAME_CORRECTIONS = {
 };
 
 // Listen to Firebase for real-time updates
+// ── Transactions collection ───────────────────────────────────────────────────
+// Transactions live in a SEPARATE collection — never touched by refreshAllStats
+// Each doc: { teamId, droppedPlayer, droppedAt, droppedStat, addedPlayer, addedAt, hrBaseline, hbpBaseline, type }
+
+async function loadTransactions() {
+  try {
+    const snap = await getDocs(transactionsCol);
+    const txs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    set({ transactions: txs });
+    return txs;
+  } catch(e) {
+    console.error("loadTransactions failed:", e);
+    return [];
+  }
+}
+
+async function saveTransaction(tx) {
+  // id = teamId_addedPlayerName (unique per transaction slot)
+  const id = `${tx.teamId}_${tx.addedPlayer.replace(/[^a-zA-Z0-9]/g,'_')}`;
+  try {
+    await setDoc(doc(db, "transactions", id), { ...tx, savedAt: new Date().toISOString() });
+    await loadTransactions();
+    return true;
+  } catch(e) {
+    console.error("saveTransaction failed:", e);
+    return false;
+  }
+}
+
+async function deleteTransaction(txId) {
+  try {
+    await deleteDoc(doc(db, "transactions", txId));
+    await loadTransactions();
+    return true;
+  } catch(e) {
+    console.error("deleteTransaction failed:", e);
+    return false;
+  }
+}
+
+// Apply transactions on top of teams — pure function, no Firebase calls
+function applyTransactions(teams, transactions) {
+  const result = JSON.parse(JSON.stringify(teams));
+  transactions.forEach(tx => {
+    const team = result.find(t => t.id === tx.teamId);
+    if(!team) return;
+    // Mark dropped player
+    const dropped = team.players.find(p => p.name === tx.droppedPlayer);
+    if(dropped) {
+      dropped.droppedAt = tx.droppedAt || "2026-01-01";
+    }
+    // Add transaction player if not already present
+    const exists = team.players.find(p => p.name === tx.addedPlayer);
+    if(!exists) {
+      team.players.push({
+        name: tx.addedPlayer,
+        type: tx.type || "hr",
+        addedAt: tx.addedAt,
+        droppedAt: null,
+        hrBaseline: tx.hrBaseline ?? null,
+        hbpBaseline: tx.hbpBaseline ?? null,
+        effectiveHR: tx.effectiveHR || 0,
+        effectiveHBP: tx.effectiveHBP || 0,
+        teamAbbr: tx.teamAbbr || null,
+      });
+    } else {
+      // Update existing with transaction data
+      exists.addedAt = tx.addedAt;
+      exists.hrBaseline = tx.hrBaseline ?? exists.hrBaseline;
+      exists.hbpBaseline = tx.hbpBaseline ?? exists.hbpBaseline;
+    }
+    team.hasUsedTransaction = true;
+  });
+  return result;
+}
+
 // Merge Firebase data on top of HARDCODED_TEAMS structure
 onSnapshot(leagueRef, snap => {
   if(snap.exists()) {
     const data = snap.data();
     if(data.teams?.length > 0) {
+      // Build base teams from hardcoded structure + Firebase stats only
       const merged = JSON.parse(JSON.stringify(HARDCODED_TEAMS));
       merged.forEach(team => {
         const saved = data.teams.find(t => t.id === team.id);
         if(!saved) return;
-        team.hasUsedTransaction = saved.hasUsedTransaction || false;
-
-        // Match hardcoded players by name, copy stats from Firebase
+        // Only copy STATS — never copy transaction fields from league/data
         team.players.forEach(p => {
           const sp = saved.players?.find(s => s.name === p.name);
           if(!sp) return;
           if(p.type === "hr") {
             p.effectiveHR = sp.effectiveHR || 0;
-            p.hrBaseline = sp.hrBaseline ?? null;
-            p.droppedAt = sp.droppedAt || null;
-            p.addedAt = sp.addedAt || null;
             if(sp.teamAbbr) p.teamAbbr = sp.teamAbbr;
           }
           if(p.type === "hbp") {
             p.effectiveHBP = sp.effectiveHBP || 0;
-            p.hbpBaseline = sp.hbpBaseline ?? null;
-            p.droppedAt = sp.droppedAt || null;
-            p.addedAt = sp.addedAt || null;
             if(sp.teamAbbr) p.teamAbbr = sp.teamAbbr;
           }
         });
-
-        // CRITICAL: Preserve ALL transaction players from Firebase
-        // These are players in saved data that are NOT in HARDCODED_TEAMS for this team
-        const hardcodedNames = new Set(
-          HARDCODED_TEAMS.find(hc => hc.id === team.id)?.players.map(p => p.name) || []
-        );
-        (saved.players || []).forEach(sp => {
-          if(!hardcodedNames.has(sp.name)) {
-            // This is a transaction player — always keep it from Firebase verbatim
-            team.players.push({ ...sp });
-          }
-        });
       });
-      set({ teams: merged, lastUpdated: data.lastUpdated||null });
+      // Apply transactions from separate collection on top
+      const withTx = applyTransactions(merged, S.transactions);
+      set({ teams: withTx, lastUpdated: data.lastUpdated||null });
       maybeAutoSnapshot();
     }
   }
@@ -444,38 +505,80 @@ onSnapshot(leagueRef, snap => {
 
 async function saveToFirebase(teams) {
   const now = new Date().toISOString();
-  // Enforce hardcoded team names/owners but preserve all players including transactions
+  // Only save HARDCODED players with stats — transaction players live in transactions/ collection
+  const hardcodedNames_map = {};
+  HARDCODED_TEAMS.forEach(hc => {
+    hardcodedNames_map[hc.id] = new Set(hc.players.map(p => p.name));
+  });
   const corrected = teams.map(t => {
     const hc = HARDCODED_TEAMS.find(h => h.id === t.id);
     if(!hc) return t;
-    // Keep full players array as-is (includes transaction adds/drops)
-    return { ...t, name: hc.name, owner: hc.owner };
+    // Only save hardcoded players, strip transaction fields
+    const players = t.players
+      .filter(p => hardcodedNames_map[t.id]?.has(p.name))
+      .map(p => ({
+        name: p.name,
+        type: p.type,
+        teamAbbr: p.teamAbbr || null,
+        effectiveHR: p.effectiveHR || 0,
+        effectiveHBP: p.effectiveHBP || 0,
+        hrBaseline: null,
+        hbpBaseline: null,
+        addedAt: null,
+        droppedAt: null,
+      }));
+    return { ...t, name: hc.name, owner: hc.owner, hasUsedTransaction: false, players };
   });
   await setDoc(leagueRef, { teams: corrected, lastUpdated: now });
-  set({ teams: corrected, lastUpdated: now });
 }
 
 // ── MLB Stats refresh ─────────────────────────────────────────────────────────
 async function refreshAllStats() {
   set({ refreshing: true, refreshStatus: "Fetching stats…" });
-  const updated = JSON.parse(JSON.stringify(S.teams));
+  // Work from HARDCODED_TEAMS only — transaction players handled separately
+  const updated = JSON.parse(JSON.stringify(HARDCODED_TEAMS));
+  // Also update transaction player stats separately
+  const txUpdates = {}; // { txId: { effectiveHR/HBP, teamAbbr } }
+
   for(const t of updated) {
     for(const p of t.players) {
       if(!p.name?.trim()) continue;
       const s = await fetchStats(p.name); if(!s) continue;
-      if(p.type==="hr" && !p.droppedAt) {
-        if(p.addedAt){ if(p.hrBaseline===null) p.hrBaseline=s.hr; p.effectiveHR=Math.max(0,s.hr-p.hrBaseline); }
-        else p.effectiveHR=s.hr;
-      }
-      if(p.type==="hbp" && !p.droppedAt) {
-        if(p.addedAt){ if(p.hbpBaseline===null) p.hbpBaseline=s.hbp; p.effectiveHBP=Math.max(0,s.hbp-p.hbpBaseline); }
-        else p.effectiveHBP=s.hbp;
-      }
-      if(s.teamAbbr) p.teamAbbr=s.teamAbbr;
+      if(p.type==="hr") p.effectiveHR = s.hr;
+      if(p.type==="hbp") p.effectiveHBP = s.hbp;
+      if(s.teamAbbr) p.teamAbbr = s.teamAbbr;
     }
   }
+
+  // Update transaction player stats — read baselines from S.transactions
+  for(const tx of S.transactions) {
+    const s = await fetchStats(tx.addedPlayer); if(!s) continue;
+    const txId = `${tx.teamId}_${tx.addedPlayer.replace(/[^a-zA-Z0-9]/g,'_')}`;
+    if(tx.type === "hr") {
+      const baseline = tx.hrBaseline ?? s.hr;
+      txUpdates[txId] = { effectiveHR: Math.max(0, s.hr - baseline), teamAbbr: s.teamAbbr };
+    }
+    if(tx.type === "hbp") {
+      const baseline = tx.hbpBaseline ?? s.hbp;
+      txUpdates[txId] = { effectiveHBP: Math.max(0, s.hbp - baseline), teamAbbr: s.teamAbbr };
+    }
+  }
+
+  // Save stat-only data to league/data
   await saveToFirebase(updated);
-  set({ refreshing: false, refreshStatus: "✓ Updated!" });
+
+  // Save updated effectiveHR/HBP back to each transaction doc
+  for(const [txId, vals] of Object.entries(txUpdates)) {
+    const tx = S.transactions.find(t => `${t.teamId}_${t.addedPlayer.replace(/[^a-zA-Z0-9]/g,'_')}` === txId);
+    if(tx) {
+      await setDoc(doc(db, "transactions", txId), { ...tx, ...vals, savedAt: new Date().toISOString() });
+    }
+  }
+
+  // Reload transactions and reapply
+  const txs = await loadTransactions();
+  const withTx = applyTransactions(updated, txs);
+  set({ teams: withTx, refreshing: false, refreshStatus: "✓ Updated!" });
   setTimeout(()=>set({refreshStatus:""}), 3000);
 }
 
@@ -2031,23 +2134,100 @@ function buildCommish() {
     set({cpLocal:updated,cpRefreshing:false,cpStatus:"✓ Stats updated!"});
     setTimeout(()=>set({cpStatus:""}),3000);
   }},S.cpRefreshing?"⟳ Refreshing…":"⟳ Refresh Live Stats"));
-  actions.appendChild(h("button",{style:{padding:"10px 18px",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"13px",background:C.accent,border:"none",color:"#000"},onClick:async()=>{
-        // Protect addedAt/hrBaseline/hbpBaseline/droppedAt — never overwrite if set in Firebase
-        const toSave = JSON.parse(JSON.stringify(local));
-        toSave.forEach(team => {
-          const fbTeam = S.teams.find(t => t.id === team.id);
-          if(!fbTeam) return;
-          team.players.forEach(p => {
-            const fbP = fbTeam.players.find(fp => fp.name === p.name);
-            if(!fbP) return;
-            if(fbP.addedAt) p.addedAt = fbP.addedAt;
-            if(fbP.droppedAt) p.droppedAt = fbP.droppedAt;
-            if(fbP.hrBaseline !== null && fbP.hrBaseline !== undefined) p.hrBaseline = fbP.hrBaseline;
-            if(fbP.hbpBaseline !== null && fbP.hbpBaseline !== undefined) p.hbpBaseline = fbP.hbpBaseline;
-          });
-        });
-        await saveToFirebase(toSave);set({cpStatus:"✓ Saved!"});setTimeout(()=>set({cpStatus:""}),2000);}},  "💾 Save"));
+  actions.appendChild(h("button",{style:{padding:"10px 18px",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"13px",background:C.accent,border:"none",color:"#000"},onClick:async()=>{await saveToFirebase(local);set({cpStatus:"✓ Saved!"});setTimeout(()=>set({cpStatus:""}),2000);}},  "💾 Save"));
   panel.appendChild(actions);
+
+  // Transaction Management Section
+  const txMgmt = h("div",{style:{marginTop:"24px",paddingTop:"20px",borderTop:`1px solid ${C.border}`}});
+  txMgmt.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"12px"}},"Transaction Management"));
+  txMgmt.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",marginBottom:"12px"}},"Add or remove transactions. These are stored separately and can never be overwritten by stat refreshes."));
+  // List existing transactions
+  S.transactions.forEach(tx => {
+      const txRow = h("div",{style:{background:C.bg,borderRadius:"8px",padding:"10px 14px",marginBottom:"8px",border:`1px solid ${C.border}`}});
+      const teamName = S.teams.find(t=>t.id===tx.teamId)?.name || `Team ${tx.teamId}`;
+      txRow.appendChild(h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}},
+        h("div",{style:{color:C.text,fontWeight:"700",fontSize:"12px"}},teamName),
+        h("div",{style:{color:C.muted,fontSize:"11px"}},tx.addedAt)
+      ));
+      txRow.appendChild(h("div",{style:{display:"flex",gap:"6px",alignItems:"center",marginBottom:"4px"}},
+        h("span",{style:{color:C.red,fontSize:"10px",fontWeight:"700",background:C.red+"22",border:`1px solid ${C.red}44`,borderRadius:"3px",padding:"1px 6px"}},"DROP"),
+        h("span",{style:{color:C.muted,fontSize:"12px"}},`${tx.droppedPlayer} (${tx.droppedStat||"—"})`)
+      ));
+      txRow.appendChild(h("div",{style:{display:"flex",gap:"6px",alignItems:"center",justifyContent:"space-between"}},
+        h("div",{style:{display:"flex",gap:"6px",alignItems:"center"}},
+          h("span",{style:{color:C.green,fontSize:"10px",fontWeight:"700",background:C.green+"22",border:`1px solid ${C.green}44`,borderRadius:"3px",padding:"1px 6px"}},"ADD"),
+          h("span",{style:{color:C.muted,fontSize:"12px"}},`${tx.addedPlayer} (baseline: ${tx.hrBaseline??tx.hbpBaseline??0})`)
+        ),
+        h("button",{style:{padding:"3px 10px",borderRadius:"4px",cursor:"pointer",background:"#e84a4a22",border:"1px solid #e84a4a44",color:C.red,fontSize:"11px",fontWeight:"700"},
+          onClick:async()=>{
+            const txId = `${tx.teamId}_${tx.addedPlayer.replace(/[^a-zA-Z0-9]/g,"_")}`;
+            await deleteTransaction(txId);
+          }
+        },"Remove")
+      ));
+    txMgmt.appendChild(txRow);
+  });
+  // Add new transaction form
+  const form = h("div",{style:{background:C.bg,borderRadius:"8px",padding:"12px 14px",border:`1px solid ${C.border}`,marginTop:"8px"}});
+      form.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",marginBottom:"10px"}},"Add New Transaction"));
+      // Team selector
+      const teamSel = h("select",{style:{width:"100%",padding:"7px 10px",borderRadius:"6px",background:C.card,border:`1px solid ${C.border}`,color:C.text,fontSize:"12px",marginBottom:"8px"}});
+      teamSel.appendChild(h("option",{value:""},"Select team…"));
+      S.teams.forEach(t => teamSel.appendChild(h("option",{value:t.id},t.name)));
+      form.appendChild(teamSel);
+      // Dropped player
+      const dropInp = h("input",{style:{width:"100%",padding:"7px 10px",borderRadius:"6px",background:C.card,border:`1px solid ${C.border}`,color:C.text,fontSize:"12px",marginBottom:"8px"}});
+      dropInp.placeholder = "Dropped player name";
+      form.appendChild(dropInp);
+      // Dropped stat
+      const dropStat = h("input",{style:{width:"100%",padding:"7px 10px",borderRadius:"6px",background:C.card,border:`1px solid ${C.border}`,color:C.text,fontSize:"12px",marginBottom:"8px"}});
+      dropStat.placeholder = "Stat at drop (e.g. 4 HR)";
+      form.appendChild(dropStat);
+      // Added player
+      const addInp = h("input",{style:{width:"100%",padding:"7px 10px",borderRadius:"6px",background:C.card,border:`1px solid ${C.border}`,color:C.text,fontSize:"12px",marginBottom:"8px"}});
+      addInp.placeholder = "Added player name";
+      form.appendChild(addInp);
+      // Type
+      const typeSel = h("select",{style:{width:"100%",padding:"7px 10px",borderRadius:"6px",background:C.card,border:`1px solid ${C.border}`,color:C.text,fontSize:"12px",marginBottom:"8px"}});
+      typeSel.appendChild(h("option",{value:"hr"},"HR Player"));
+      typeSel.appendChild(h("option",{value:"hbp"},"HBP Player"));
+      form.appendChild(typeSel);
+      // Date
+      const dateInp = h("input",{style:{width:"100%",padding:"7px 10px",borderRadius:"6px",background:C.card,border:`1px solid ${C.border}`,color:C.text,fontSize:"12px",marginBottom:"8px"}});
+      dateInp.placeholder = "Transaction date (YYYY-MM-DD)";
+      dateInp.value = new Date().toISOString().split("T")[0];
+      form.appendChild(dateInp);
+      // Baseline
+      const baseInp = h("input",{type:"number",style:{width:"100%",padding:"7px 10px",borderRadius:"6px",background:C.card,border:`1px solid ${C.border}`,color:C.text,fontSize:"12px",marginBottom:"12px"}});
+      baseInp.placeholder = "HR/HBP baseline at time of add";
+      baseInp.min = "0";
+      form.appendChild(baseInp);
+      // Save button
+      form.appendChild(h("button",{
+        style:{width:"100%",padding:"9px",borderRadius:"8px",cursor:"pointer",fontWeight:"700",fontSize:"13px",background:`${C.green}22`,border:`1px solid ${C.green}44`,color:C.green},
+        onClick:async()=>{
+          const teamId = parseInt(teamSel.value);
+          const dropped = dropInp.value.trim();
+          const added = addInp.value.trim();
+          const date = dateInp.value.trim();
+          const baseline = parseInt(baseInp.value)||0;
+          const type = typeSel.value;
+          const droppedStatVal = dropStat.value.trim();
+          if(isNaN(teamId)||!dropped||!added||!date){ alert("Please fill in all fields."); return; }
+          const tx = {
+            teamId, droppedPlayer:dropped, droppedAt:date, droppedStat:droppedStatVal,
+            addedPlayer:added, addedAt:date, type,
+            hrBaseline: type==="hr" ? baseline : null,
+            hbpBaseline: type==="hbp" ? baseline : null,
+            effectiveHR:0, effectiveHBP:0, teamAbbr:null
+          };
+          const ok = await saveTransaction(tx);
+          if(ok){ dropInp.value=""; addInp.value=""; baseInp.value=""; dropStat.value=""; set({cpStatus:"✓ Transaction saved!"}); setTimeout(()=>set({cpStatus:""}),3000); }
+          else { alert("Failed to save transaction. Check console."); }
+        }
+      },"💾 Save Transaction"));
+  txMgmt.appendChild(form);
+  panel.appendChild(txMgmt);
 
   // History backfill section
   panel.appendChild(h("div",{style:{marginTop:"24px",paddingTop:"20px",borderTop:`1px solid ${C.border}`}},
@@ -2154,7 +2334,10 @@ function handleLogin() {
   else set({pwError:true});
 }
 
-render();
+// Load transactions from separate collection on startup
+loadTransactions().then(() => {
+  render();
+});
 setInterval(() => { if(S.tab === "rules") render(); }, 60000);
 
 const _splash = document.getElementById("splash-screen");
