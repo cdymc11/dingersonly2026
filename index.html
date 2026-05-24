@@ -474,36 +474,7 @@ function applyTransactions(teams, transactions) {
 }
 
 // Merge Firebase data on top of HARDCODED_TEAMS structure
-onSnapshot(leagueRef, snap => {
-  if(snap.exists()) {
-    const data = snap.data();
-    if(data.teams?.length > 0) {
-      // Build base teams from hardcoded structure + Firebase stats only
-      const merged = JSON.parse(JSON.stringify(HARDCODED_TEAMS));
-      merged.forEach(team => {
-        const saved = data.teams.find(t => t.id === team.id);
-        if(!saved) return;
-        // Only copy STATS — never copy transaction fields from league/data
-        team.players.forEach(p => {
-          const sp = saved.players?.find(s => s.name === p.name);
-          if(!sp) return;
-          if(p.type === "hr") {
-            p.effectiveHR = sp.effectiveHR || 0;
-            if(sp.teamAbbr) p.teamAbbr = sp.teamAbbr;
-          }
-          if(p.type === "hbp") {
-            p.effectiveHBP = sp.effectiveHBP || 0;
-            if(sp.teamAbbr) p.teamAbbr = sp.teamAbbr;
-          }
-        });
-      });
-      // Apply transactions from separate collection on top
-      const withTx = applyTransactions(merged, S.transactions);
-      set({ teams: withTx, lastUpdated: data.lastUpdated||null });
-      maybeAutoSnapshot();
-    }
-  }
-});
+// onSnapshot moved inside loadTransactions().then() to ensure proper load order
 
 async function saveToFirebase(teams) {
   const now = new Date().toISOString();
@@ -2340,8 +2311,37 @@ function handleLogin() {
   else set({pwError:true});
 }
 
-// Load transactions from separate collection on startup
+// Load transactions first, THEN start listening to Firebase
+// This ensures transactions are available when onSnapshot fires
 loadTransactions().then(() => {
+  // Now start the Firebase listener — S.transactions is populated
+  onSnapshot(leagueRef, snap => {
+    if(snap.exists()) {
+      const data = snap.data();
+      if(data.teams?.length > 0) {
+        const merged = JSON.parse(JSON.stringify(HARDCODED_TEAMS));
+        merged.forEach(team => {
+          const saved = data.teams.find(t => t.id === team.id);
+          if(!saved) return;
+          team.players.forEach(p => {
+            const sp = saved.players?.find(s => s.name === p.name);
+            if(!sp) return;
+            if(p.type === "hr") {
+              p.effectiveHR = sp.effectiveHR || 0;
+              if(sp.teamAbbr) p.teamAbbr = sp.teamAbbr;
+            }
+            if(p.type === "hbp") {
+              p.effectiveHBP = sp.effectiveHBP || 0;
+              if(sp.teamAbbr) p.teamAbbr = sp.teamAbbr;
+            }
+          });
+        });
+        const withTx = applyTransactions(merged, S.transactions);
+        set({ teams: withTx, lastUpdated: data.lastUpdated||null });
+        maybeAutoSnapshot();
+      }
+    }
+  });
   render();
 });
 setInterval(() => { if(S.tab === "rules") render(); }, 60000);
