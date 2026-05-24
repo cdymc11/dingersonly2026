@@ -236,7 +236,7 @@ function score(team) {
 }
 function teamHR(team) { return (team.players||[]).filter(p=>p.type==="hr").reduce((s,p)=>s+(p.effectiveHR||0),0); }
 function teamHBP(team){ return (team.players||[]).filter(p=>p.type==="hbp").reduce((s,p)=>s+(p.effectiveHBP||0),0); }
-function fmtDate(iso){ if(!iso)return"—"; return new Date(iso).toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
+function fmtDate(iso){ if(!iso)return"—"; return new Date(iso+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"}); }
 function fmtTime(iso){ if(!iso)return""; return new Date(iso).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}); }
 
 // Hardcoded MLB IDs for all drafted players — bypasses name search entirely
