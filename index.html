@@ -441,10 +441,12 @@ function applyTransactions(teams, transactions) {
   transactions.forEach(tx => {
     const team = result.find(t => t.id === tx.teamId);
     if(!team) return;
-    // Mark dropped player
+    // Mark dropped player and zero out their stats
     const dropped = team.players.find(p => p.name === tx.droppedPlayer);
     if(dropped) {
       dropped.droppedAt = tx.droppedAt || "2026-01-01";
+      dropped.effectiveHR = 0;
+      dropped.effectiveHBP = 0;
     }
     // Add transaction player if not already present
     const exists = team.players.find(p => p.name === tx.addedPlayer);
@@ -514,14 +516,18 @@ async function saveToFirebase(teams) {
     const hc = HARDCODED_TEAMS.find(h => h.id === t.id);
     if(!hc) return t;
     // Only save hardcoded players, strip transaction fields
+    // Zero out stats for dropped players
+    const droppedNames = new Set(
+      S.transactions.filter(tx => tx.teamId === t.id).map(tx => tx.droppedPlayer)
+    );
     const players = t.players
       .filter(p => hardcodedNames_map[t.id]?.has(p.name))
       .map(p => ({
         name: p.name,
         type: p.type,
         teamAbbr: p.teamAbbr || null,
-        effectiveHR: p.effectiveHR || 0,
-        effectiveHBP: p.effectiveHBP || 0,
+        effectiveHR: droppedNames.has(p.name) ? 0 : (p.effectiveHR || 0),
+        effectiveHBP: droppedNames.has(p.name) ? 0 : (p.effectiveHBP || 0),
         hrBaseline: null,
         hbpBaseline: null,
         addedAt: null,
