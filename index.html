@@ -441,12 +441,11 @@ function applyTransactions(teams, transactions) {
   transactions.forEach(tx => {
     const team = result.find(t => t.id === tx.teamId);
     if(!team) return;
-    // Mark dropped player and zero out their stats
+    // Mark dropped player — keep their stats, just flag as dropped
     const dropped = team.players.find(p => p.name === tx.droppedPlayer);
     if(dropped) {
       dropped.droppedAt = tx.droppedAt || "2026-01-01";
-      dropped.effectiveHR = 0;
-      dropped.effectiveHBP = 0;
+      // Do NOT zero stats — their accumulated HRs/HBPs count toward team score
     }
     // Add transaction player if not already present
     const exists = team.players.find(p => p.name === tx.addedPlayer);
@@ -487,18 +486,15 @@ async function saveToFirebase(teams) {
     const hc = HARDCODED_TEAMS.find(h => h.id === t.id);
     if(!hc) return t;
     // Only save hardcoded players, strip transaction fields
-    // Zero out stats for dropped players
-    const droppedNames = new Set(
-      S.transactions.filter(tx => tx.teamId === t.id).map(tx => tx.droppedPlayer)
-    );
+    // Keep dropped player stats — their accumulated HRs/HBPs count toward team score
     const players = t.players
       .filter(p => hardcodedNames_map[t.id]?.has(p.name))
       .map(p => ({
         name: p.name,
         type: p.type,
         teamAbbr: p.teamAbbr || null,
-        effectiveHR: droppedNames.has(p.name) ? 0 : (p.effectiveHR || 0),
-        effectiveHBP: droppedNames.has(p.name) ? 0 : (p.effectiveHBP || 0),
+        effectiveHR: p.effectiveHR || 0,
+        effectiveHBP: p.effectiveHBP || 0,
         hrBaseline: null,
         hbpBaseline: null,
         addedAt: null,
@@ -517,9 +513,28 @@ async function refreshAllStats() {
   // Also update transaction player stats separately
   const txUpdates = {}; // { txId: { effectiveHR/HBP, teamAbbr } }
 
+  // Build set of dropped player names per team from transactions
+  const droppedByTeam = {};
+  S.transactions.forEach(tx => {
+    if(!droppedByTeam[tx.teamId]) droppedByTeam[tx.teamId] = new Set();
+    droppedByTeam[tx.teamId].add(tx.droppedPlayer);
+  });
+
   for(const t of updated) {
     for(const p of t.players) {
       if(!p.name?.trim()) continue;
+      // Skip dropped players — their stats are frozen at time of drop
+      if(droppedByTeam[t.id]?.has(p.name)) {
+        // Preserve their last known stats from Firebase
+        const fbTeam = S.teams.find(ft => ft.id === t.id);
+        const fbPlayer = fbTeam?.players.find(fp => fp.name === p.name);
+        if(fbPlayer) {
+          p.effectiveHR = fbPlayer.effectiveHR || 0;
+          p.effectiveHBP = fbPlayer.effectiveHBP || 0;
+          p.teamAbbr = fbPlayer.teamAbbr || p.teamAbbr;
+        }
+        continue;
+      }
       const s = await fetchStats(p.name); if(!s) continue;
       if(p.type==="hr") p.effectiveHR = s.hr;
       if(p.type==="hbp") p.effectiveHBP = s.hbp;
