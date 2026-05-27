@@ -24,6 +24,19 @@
     input::placeholder { color: #6b7fa3; }
     .tab-btn { transition: all 0.15s; }
     .row-hover:hover { background: rgba(232,200,74,0.09) !important; }
+    @keyframes celebFall {
+      0%   { transform: translateY(-20px) rotate(0deg);   opacity: 1; }
+      100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+    }
+    @keyframes celebPop {
+      0%   { transform: scale(0.4) translateY(20px); opacity: 0; }
+      60%  { transform: scale(1.15) translateY(-8px); opacity: 1; }
+      100% { transform: scale(1) translateY(0);      opacity: 1; }
+    }
+    @keyframes celebFadeOut {
+      0%   { opacity: 1; }
+      100% { opacity: 0; }
+    }
 
     #splash-screen {
       position: fixed; inset: 0; background: #080c12;
@@ -366,6 +379,7 @@ let S = {
   hotFilter: "all",
   historyWeeks: null, historyLoading: false, historyWeekIdx: 0,
   transactions: [], // [{id, teamId, droppedPlayer, droppedAt, droppedStat, addedPlayer, addedAt, hrBaseline, hbpBaseline, type}]
+  hrCelebration: null, // {name, count, type}
   commishInput: "", commishUnlocked: false, showCommish: false, pwError: false,
   refreshing: false, refreshStatus: "",
   // commissioner panel
@@ -821,7 +835,7 @@ function buildRecent() {
         const list = h("div",{style:{display:"flex",flexDirection:"column",gap:"10px",marginBottom:"20px"}});
         S.ydResults.forEach(r=>{
           const color = r.type==="hr"?C.red:C.green;
-          const card = h("div",{class:"row-hover",style:{background:C.card,border:`1px solid ${color}44`,borderRadius:"12px",padding:"16px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"},onClick:()=>openSpotlight(r.name,r.fantasyTeam,r.type)});
+          const card = h("div",{class:"row-hover",style:{background:C.card,border:`1px solid ${color}44`,borderRadius:"12px",padding:"16px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"},onClick:()=>{ set({hrCelebration:{name:r.name,count:r.type==="hr"?r.hr:r.hbp,type:r.type}}); setTimeout(()=>openSpotlight(r.name,r.fantasyTeam,r.type),300); }});
           const nameWrap = h("div",{style:{color:C.text,fontWeight:"700",fontSize:"16px"}},r.name);
           if(r.teamAbbr) nameWrap.appendChild(h("span",{style:{color:C.muted,fontWeight:"400",fontSize:"14px"}},` (${r.teamAbbr})`));
           card.appendChild(h("div",{},nameWrap,h("div",{style:{color:C.muted,fontSize:"12px",marginTop:"2px"}},r.fantasyTeam)));
@@ -2248,6 +2262,58 @@ function buildCommish() {
 
 // ── Main render ───────────────────────────────────────────────────────────────
 
+
+function buildHRCelebration() {
+  const { name, count, type } = S.hrCelebration;
+  const isHR = type === "hr";
+  const color = isHR ? "#e84a4a" : "#4ae89a";
+  const emoji = isHR ? "⚾" : "🎯";
+  const label = isHR ? (count === 1 ? "HOME RUN!" : `${count} HOME RUNS!`) : (count === 1 ? "HIT BY PITCH!" : `${count} HBPs!`);
+
+  const overlay = h("div", {
+    style: { position:"fixed",inset:"0",zIndex:"2000",overflow:"hidden",background:"rgba(0,0,0,0.82)",
+             display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",
+             animation:"celebFadeOut 0.4s ease 2.4s both" },
+    onClick: () => set({ hrCelebration: null })
+  });
+
+  // Falling emojis
+  const EMOJIS = isHR ? ["⚾","🔥","💥","⚾","🏟️","⚾","💫","⚾"] : ["🎯","⚾","💥","🎯","⚾","💫"];
+  EMOJIS.forEach((em, i) => {
+    const el = h("div", {});
+    Object.assign(el.style, {
+      position: "absolute",
+      top: "-30px",
+      left: `${8 + (i / EMOJIS.length) * 85}%`,
+      fontSize: `${20 + Math.random() * 18}px`,
+      animation: `celebFall ${1.4 + i * 0.15}s cubic-bezier(0.25,0.46,0.45,0.94) ${i * 0.12}s both`,
+      pointerEvents: "none",
+    });
+    el.textContent = em;
+    overlay.appendChild(el);
+  });
+
+  // Center card
+  const card = h("div", {
+    style: { textAlign:"center", animation:"celebPop 0.5s cubic-bezier(0.22,1,0.36,1) 0.1s both",
+             background:"#1a2235", border:`2px solid ${color}`, borderRadius:"20px",
+             padding:"32px 40px", maxWidth:"280px", width:"80%" }
+  });
+  card.appendChild(h("div", { style:{ fontSize:"52px", marginBottom:"8px", lineHeight:"1" } }, emoji));
+  card.appendChild(h("div", { style:{ color, fontSize:"28px", fontWeight:"900",
+                                       fontFamily:"'Bebas Neue', sans-serif", letterSpacing:"0.05em",
+                                       marginBottom:"8px" } }, label));
+  card.appendChild(h("div", { style:{ color:"#f0f4ff", fontSize:"18px", fontWeight:"700",
+                                       marginBottom:"6px" } }, name));
+  card.appendChild(h("div", { style:{ color:"#6b7fa3", fontSize:"12px" } }, "tap to dismiss"));
+  overlay.appendChild(card);
+
+  // Auto dismiss after 2.8s
+  setTimeout(() => set({ hrCelebration: null }), 2800);
+
+  return overlay;
+}
+
 function buildLogoModal() {
   const teamId = S.selectedLogo;
   const team = S.teams.find(t=>t.id===teamId);
@@ -2321,6 +2387,7 @@ function render() {
   app.appendChild(body);
 
   if(S.selectedLogo !== null) app.appendChild(buildLogoModal());
+  if(S.hrCelebration) app.appendChild(buildHRCelebration());
   if(S.selectedTeam) app.appendChild(buildTeamModal(S.selectedTeam));
   if(S.spotlightPlayer) app.appendChild(buildSpotlightModal());
   if(S.projectedTeam) app.appendChild(buildProjectedTeamModal());
