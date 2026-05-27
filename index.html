@@ -835,7 +835,7 @@ function buildRecent() {
         const list = h("div",{style:{display:"flex",flexDirection:"column",gap:"10px",marginBottom:"20px"}});
         S.ydResults.forEach(r=>{
           const color = r.type==="hr"?C.red:C.green;
-          const card = h("div",{class:"row-hover",style:{background:C.card,border:`1px solid ${color}44`,borderRadius:"12px",padding:"16px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"},onClick:()=>{ set({hrCelebration:{name:r.name,count:r.type==="hr"?(r.hr||0):(r.hbp||0),type:r.type}}); setTimeout(()=>openSpotlight(r.name,r.fantasyTeam,r.type),300); }});
+          const card = h("div",{class:"row-hover",style:{background:C.card,border:`1px solid ${color}44`,borderRadius:"12px",padding:"16px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"},onClick:()=>{ set({hrCelebration:{name:r.name,count:r.type==="hr"?(r.hr||0):(r.hbp||0),type:r.type,fantasyTeam:r.fantasyTeam}}); }});
           const nameWrap = h("div",{style:{color:C.text,fontWeight:"700",fontSize:"16px"}},r.name);
           if(r.teamAbbr) nameWrap.appendChild(h("span",{style:{color:C.muted,fontWeight:"400",fontSize:"14px"}},` (${r.teamAbbr})`));
           card.appendChild(h("div",{},nameWrap,h("div",{style:{color:C.muted,fontSize:"12px",marginTop:"2px"}},r.fantasyTeam)));
@@ -2284,9 +2284,8 @@ function buildHRCelebration() {
 
   const overlay = h("div", {
     style: { position:"fixed",inset:"0",zIndex:"2000",overflow:"hidden",background:"rgba(0,0,0,0.82)",
-             display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",
-             animation:"celebFadeOut 0.4s ease 2.4s both" },
-    onClick: () => set({ hrCelebration: null })
+             display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer" },
+    onClick: () => { set({ hrCelebration: null }); openSpotlight(S.hrCelebration.name, S.hrCelebration.fantasyTeam, S.hrCelebration.type); }
   });
 
   // Falling emojis
@@ -2317,11 +2316,10 @@ function buildHRCelebration() {
                                        marginBottom:"8px" } }, label));
   card.appendChild(h("div", { style:{ color:"#f0f4ff", fontSize:"18px", fontWeight:"700",
                                        marginBottom:"6px" } }, name));
-  card.appendChild(h("div", { style:{ color:"#6b7fa3", fontSize:"12px" } }, "tap to dismiss"));
+  card.appendChild(h("div", { style:{ color:"#6b7fa3", fontSize:"12px" } }, "tap for stats"));
   overlay.appendChild(card);
 
-  // Auto dismiss after 2.8s
-  setTimeout(() => set({ hrCelebration: null }), 2800);
+  // No auto-dismiss — user taps to close and open Spotlight
 
   return overlay;
 }
