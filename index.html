@@ -835,7 +835,7 @@ function buildRecent() {
         const list = h("div",{style:{display:"flex",flexDirection:"column",gap:"10px",marginBottom:"20px"}});
         S.ydResults.forEach(r=>{
           const color = r.type==="hr"?C.red:C.green;
-          const card = h("div",{class:"row-hover",style:{background:C.card,border:`1px solid ${color}44`,borderRadius:"12px",padding:"16px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"},onClick:()=>{ set({hrCelebration:{name:r.name,count:r.type==="hr"?r.hr:r.hbp,type:r.type}}); setTimeout(()=>openSpotlight(r.name,r.fantasyTeam,r.type),300); }});
+          const card = h("div",{class:"row-hover",style:{background:C.card,border:`1px solid ${color}44`,borderRadius:"12px",padding:"16px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"},onClick:()=>{ set({hrCelebration:{name:r.name,count:r.type==="hr"?(r.hr||0):(r.hbp||0),type:r.type}}); setTimeout(()=>openSpotlight(r.name,r.fantasyTeam,r.type),300); }});
           const nameWrap = h("div",{style:{color:C.text,fontWeight:"700",fontSize:"16px"}},r.name);
           if(r.teamAbbr) nameWrap.appendChild(h("span",{style:{color:C.muted,fontWeight:"400",fontSize:"14px"}},` (${r.teamAbbr})`));
           card.appendChild(h("div",{},nameWrap,h("div",{style:{color:C.muted,fontSize:"12px",marginTop:"2px"}},r.fantasyTeam)));
@@ -2268,7 +2268,19 @@ function buildHRCelebration() {
   const isHR = type === "hr";
   const color = isHR ? "#e84a4a" : "#4ae89a";
   const emoji = isHR ? "⚾" : "🎯";
-  const label = isHR ? (count === 1 ? "HOME RUN!" : `${count} HOME RUNS!`) : (count === 1 ? "HIT BY PITCH!" : `${count} HBPs!`);
+  const HR_QUIPS = [
+    "GONE! 💥", "SEE YA! 👋", "CRUSHED IT! 🔥", "INTO ORBIT! 🚀",
+    "OUTTA HERE! 💨", "GET THE BALL! ⚾", "DEMOLISHED! 💣", "BYE BYE BASEBALL! ✈️"
+  ];
+  const MULTI_QUIPS = [
+    "MULTI-DINGER GAME! 🔥🔥", "ARE YOU KIDDING ME?! 🤯", "ABSOLUTELY MASHING! 💥💥",
+    "SOMEBODY STOP HIM! 🚨", "CALL THE FIRE DEPARTMENT! 🔥"
+  ];
+  const HBP_QUIPS = [
+    "PLUNKED! 🎯", "WEAR IT! 💪", "TAKES ONE FOR THE TEAM! 🤕", "RIGHT IN THE RIBS! 😬"
+  ];
+  const quipList = !isHR ? HBP_QUIPS : count >= 2 ? MULTI_QUIPS : HR_QUIPS;
+  const label = quipList[Math.floor(Math.random() * quipList.length)];
 
   const overlay = h("div", {
     style: { position:"fixed",inset:"0",zIndex:"2000",overflow:"hidden",background:"rgba(0,0,0,0.82)",
