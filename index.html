@@ -1779,10 +1779,11 @@ async function openSpotlight(playerName, fantasyTeam, type) {
     const last7_split = ld.stats?.[0]?.splits?.[0]?.stat || {};
     // Get last 3 games played — sorted most recent first
     const allGames = gd.stats?.[0]?.splits || [];
+    if(allGames.length > 0) console.log("gameLog sample:", JSON.stringify(allGames[allGames.length-1]));
     const last3Games = allGames.slice(-3).reverse().map(g => ({
       date: g.date,
-      opponent: g.opponent?.abbreviation || g.team?.abbreviation || "?",
-      isHome: g.isHome,
+      opponent: g.opponent?.abbreviation || g.opponent?.name?.split(" ").pop() || g.team?.abbreviation || "—",
+      isHome: g.isHome !== undefined ? g.isHome : (g.isHomeGame ?? true),
       hr: g.stat?.homeRuns ?? 0,
       hbp: g.stat?.hitByPitch ?? 0,
       ab: g.stat?.atBats ?? 0,
