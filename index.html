@@ -1769,14 +1769,26 @@ async function openSpotlight(playerName, fantasyTeam, type) {
   if(!playerId) { set({spotlightLoading:false}); return; }
   const season = new Date().getFullYear();
   try {
-    const [sr, lr] = await Promise.all([
+    const [sr, lr, gr] = await Promise.all([
       fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=season&group=hitting&season=${season}&sportId=1`),
-      fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=lastXGames&group=hitting&season=${season}&sportId=1&limit=7`)
+      fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=lastXGames&group=hitting&season=${season}&sportId=1&limit=7`),
+      fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=gameLog&group=hitting&season=${season}&sportId=1`)
     ]);
-    const [sd, ld] = await Promise.all([sr.json(), lr.json()]);
+    const [sd, ld, gd] = await Promise.all([sr.json(), lr.json(), gr.json()]);
     const season_split = sd.stats?.[0]?.splits?.[0]?.stat || {};
     const last7_split = ld.stats?.[0]?.splits?.[0]?.stat || {};
-    set({spotlightLoading:false, spotlightData:{season:season_split, last7:last7_split, playerId}});
+    // Get last 3 games played — sorted most recent first
+    const allGames = gd.stats?.[0]?.splits || [];
+    const last3Games = allGames.slice(-3).reverse().map(g => ({
+      date: g.date,
+      opponent: g.opponent?.abbreviation || g.team?.abbreviation || "?",
+      isHome: g.isHome,
+      hr: g.stat?.homeRuns ?? 0,
+      hbp: g.stat?.hitByPitch ?? 0,
+      ab: g.stat?.atBats ?? 0,
+      h: g.stat?.hits ?? 0,
+    }));
+    set({spotlightLoading:false, spotlightData:{season:season_split, last7:last7_split, last3Games, playerId}});
   } catch(e) {
     set({spotlightLoading:false, spotlightData:null});
   }
@@ -1883,6 +1895,27 @@ function buildSpotlightModal() {
       statBox("OPS", sd.last7.ops||".---"),
     );
     modal.appendChild(last7Grid);
+    // Last 3 Games log
+    const games = sd.last3Games || [];
+    if(games.length > 0) {
+      modal.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"8px"}},"Last 3 Games"));
+      const gameTable = h("div",{style:{background:C.bg,borderRadius:"10px",overflow:"hidden",marginBottom:"20px"}});
+      games.forEach((g, i) => {
+        const statVal = sp.type==="hr" ? g.hr : g.hbp;
+        const statColor = statVal > 0 ? typeColor : C.muted;
+        const dateLabel = g.date ? new Date(g.date+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric"}) : "—";
+        const oppLabel = `${g.isHome===false ? "@" : "vs"} ${g.opponent}`;
+        const row = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 14px",borderBottom:i<games.length-1?`1px solid ${C.border}22`:"none"}});
+        row.appendChild(h("div",{style:{color:C.muted,fontSize:"12px",minWidth:"52px"}},dateLabel));
+        row.appendChild(h("div",{style:{color:C.text,fontSize:"12px",flex:"1",paddingLeft:"8px"}},oppLabel));
+        row.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"6px"}},
+          h("span",{style:{color:C.muted,fontSize:"10px",fontWeight:"700",textTransform:"uppercase"}},sp.type==="hr"?"HR":"HBP"),
+          h("span",{style:{color:statColor,fontWeight:"800",fontSize:"16px",fontFamily:"'Bebas Neue',sans-serif",minWidth:"20px",textAlign:"right"}},statVal)
+        ));
+        gameTable.appendChild(row);
+      });
+      modal.appendChild(gameTable);
+    }
   }
 
   modal.appendChild(h("button",{style:{width:"100%",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"14px"},onClick:()=>set({spotlightPlayer:null,spotlightData:null})},"Close"));
