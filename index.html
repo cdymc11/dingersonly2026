@@ -358,7 +358,8 @@ async function fetchStats(name) {
 async function fetchYesterday(playerId) {
   try {
     const y = new Date(); y.setDate(y.getDate()-1);
-    const ds = y.toISOString().split("T")[0];
+    // Use local date components to avoid UTC offset shifting the date
+    const ds = `${y.getFullYear()}-${String(y.getMonth()+1).padStart(2,"0")}-${String(y.getDate()).padStart(2,"0")}`;
     const season = new Date().getFullYear();
     const r = await fetch(`https://statsapi.mlb.com/api/v1/people/${playerId}/stats?stats=gameLog&group=hitting&season=${season}&startDate=${ds}&endDate=${ds}&sportId=1`);
     const d = await r.json();
