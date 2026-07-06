@@ -867,7 +867,6 @@ function buildRecent() {
         list.appendChild(teamCard);
       });
       wrap.appendChild(list);
-      {
       wrap.appendChild(h("button",{style:{width:"100%",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"13px"},onClick:loadYesterday},"⟳ Refresh"));
     }
     return wrap;
