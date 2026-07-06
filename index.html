@@ -948,7 +948,7 @@ async function loadYesterday() {
       if(p.type==="hbp"&&y.hbp>0) hits.push({name:p.name,teamAbbr:s.teamAbbr,fantasyTeam:team.name,stat:y.hbp,type:"hbp"});
     }
   }
-  hits.sort((a,b)=>b.stat-a.stat);
+  hits.sort((a,b) => a.fantasyTeam.localeCompare(b.fantasyTeam) || b.stat - a.stat);
   set({ydLoading:false,ydDone:true,ydResults:hits});
 }
 
@@ -1780,7 +1780,7 @@ async function openSpotlight(playerName, fantasyTeam, type) {
     const last7_split = ld.stats?.[0]?.splits?.[0]?.stat || {};
     // Get last 3 games played — sorted most recent first
     const allGames = gd.stats?.[0]?.splits || [];
-    const last3Games = allGames.slice(-3).reverse().map(g => ({
+    const last3Games = [...allGames].reverse().map(g => ({
       date: g.date,
       opponent: g.opponent?.abbreviation || g.opponent?.name?.split(" ").pop() || g.team?.abbreviation || "—",
       isHome: g.isHome !== undefined ? g.isHome : (g.isHomeGame ?? true),
@@ -1800,7 +1800,10 @@ function buildSpotlightModal() {
   if(!sp) return null;
   const typeColor = sp.type==="hr" ? C.red : C.green;
   const overlay = h("div",{style:{position:"fixed",inset:"0",background:"rgba(0,0,0,0.85)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:"1100",padding:"16px"},onClick:()=>set({spotlightPlayer:null,spotlightData:null})});
-  const modal = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"16px",padding:"24px",maxWidth:"400px",width:"100%",maxHeight:"85vh",overflowY:"auto"},onClick:e=>e.stopPropagation()});
+  const modal = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"16px",maxWidth:"400px",width:"100%",maxHeight:"90vh",display:"flex",flexDirection:"column",overflow:"hidden"},onClick:e=>e.stopPropagation()});
+  const modalHeader = h("div",{style:{padding:"20px 20px 0",flexShrink:"0"}});
+  const modalBody = h("div",{style:{padding:"0 20px",overflowY:"auto",flex:"1",WebkitOverflowScrolling:"touch"}});
+  const modalFooter = h("div",{style:{padding:"12px 20px 20px",flexShrink:"0"}});
 
   // Header with headshot
   const playerId = PLAYER_IDS[sp.name] || null;
@@ -1852,15 +1855,18 @@ function buildSpotlightModal() {
 
   // Close button
   hdrRow.appendChild(h("button",{style:{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:"20px",lineHeight:"1",flexShrink:"0"},onClick:()=>set({spotlightPlayer:null,spotlightData:null})},"✕"));
-  modal.appendChild(hdrRow);
+  modalHeader.appendChild(hdrRow);
+  modal.appendChild(modalHeader);
+  modal.appendChild(modalBody);
+  modal.appendChild(modalFooter);
 
   if(spotlightLoading) {
-    modal.appendChild(spinner("Loading player stats…"));
+    modalBody.appendChild(spinner("Loading player stats…"));
   } else if(!sd) {
-    modal.appendChild(h("div",{style:{color:C.muted,fontSize:"13px",textAlign:"center",padding:"20px"}},"Stats unavailable for this player."));
+    modalBody.appendChild(h("div",{style:{color:C.muted,fontSize:"13px",textAlign:"center",padding:"20px"}},"Stats unavailable for this player."));
   } else {
     // Season stats
-    modal.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"10px"}},"2026 Season"));
+    modalBody.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"10px"}},"2026 Season"));
     const seasonGrid = h("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"8px",marginBottom:"20px"}});
     const statBox = (label, val, highlight) => {
       const box = h("div",{style:{background:C.bg,borderRadius:"8px",padding:"10px 8px",textAlign:"center",border:`1px solid ${highlight?typeColor+"55":C.border}`}});
@@ -1874,7 +1880,7 @@ function buildSpotlightModal() {
       statBox("AVG", sd.season.avg||".---"),
       statBox("OPS", sd.season.ops||".---"),
     );
-    modal.appendChild(seasonGrid);
+    modalBody.appendChild(seasonGrid);
 
     // More season stats
     const seasonGrid2 = h("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"8px",marginBottom:"20px"}});
@@ -1884,10 +1890,10 @@ function buildSpotlightModal() {
       statBox("RBI", sd.season.rbi??"-"),
       statBox("G", sd.season.gamesPlayed??"-"),
     );
-    modal.appendChild(seasonGrid2);
+    modalBody.appendChild(seasonGrid2);
 
     // Last 7 games
-    modal.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"10px"}},"Last 7 Games"));
+    modalBody.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"10px"}},"Last 7 Games"));
     const last7Grid = h("div",{style:{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:"8px",marginBottom:"20px"}});
     last7Grid.append(
       statBox("HR", sd.last7.homeRuns??0, sp.type==="hr"),
@@ -1895,11 +1901,11 @@ function buildSpotlightModal() {
       statBox("AVG", sd.last7.avg||".---"),
       statBox("OPS", sd.last7.ops||".---"),
     );
-    modal.appendChild(last7Grid);
+    modalBody.appendChild(last7Grid);
     // Last 3 Games log
     const games = sd.last3Games || [];
     if(games.length > 0) {
-      modal.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"8px"}},"Last 3 Games"));
+      modalBody.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"8px"}},"Game Log (Season)"));
       const gameTable = h("div",{style:{background:C.bg,borderRadius:"10px",overflow:"hidden",marginBottom:"20px"}});
       games.forEach((g, i) => {
         const statVal = sp.type==="hr" ? g.hr : g.hbp;
@@ -1915,7 +1921,7 @@ function buildSpotlightModal() {
         ));
         gameTable.appendChild(row);
       });
-      modal.appendChild(gameTable);
+      modalBody.appendChild(gameTable);
     }
   }
 
