@@ -826,28 +826,48 @@ function buildRecent() {
     }
     if(S.ydLoading) { wrap.appendChild(h("div",{style:{display:"flex",justifyContent:"center",padding:"32px 0"}},spinner("Checking all players..."))); return wrap; }
     if(S.ydDone) {
-      if(!S.ydResults||S.ydResults.length===0) {
-        wrap.appendChild(h("div",{style:{textAlign:"center",padding:"32px 20px"}},
-          h("div",{style:{fontSize:"40px",marginBottom:"12px"}},"😴"),
-          h("div",{style:{color:C.text,fontSize:"16px",fontWeight:"700",marginBottom:"8px"}},"No Action Yesterday"),
-          h("div",{style:{color:C.muted,fontSize:"13px"}},"None of your drafted players hit a HR or HBP yesterday.")
-        ));
-      } else {
-        const list = h("div",{style:{display:"flex",flexDirection:"column",gap:"10px",marginBottom:"20px"}});
-        S.ydResults.forEach(r=>{
-          const color = r.type==="hr"?C.red:C.green;
-          const card = h("div",{class:"row-hover",style:{background:C.card,border:`1px solid ${color}44`,borderRadius:"12px",padding:"16px 18px",display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"},onClick:()=>{ set({hrCelebration:{name:r.name,count:r.type==="hr"?(r.hr||0):(r.hbp||0),type:r.type,fantasyTeam:r.fantasyTeam}}); }});
-          const nameWrap = h("div",{style:{color:C.text,fontWeight:"700",fontSize:"16px"}},r.name);
-          if(r.teamAbbr) nameWrap.appendChild(h("span",{style:{color:C.muted,fontWeight:"400",fontSize:"14px"}},` (${r.teamAbbr})`));
-          card.appendChild(h("div",{},nameWrap,h("div",{style:{color:C.muted,fontSize:"12px",marginTop:"2px"}},r.fantasyTeam)));
-          const right = h("div",{style:{display:"flex",alignItems:"center",gap:"10px"}});
-          right.appendChild(badge(r.type==="hr"?"HR":"HBP",color));
-          right.appendChild(h("span",{style:{color,fontFamily:"'Bebas Neue', sans-serif",fontSize:"32px",fontWeight:"800",lineHeight:"1"}},r.stat));
-          card.appendChild(right);
-          list.appendChild(card);
-        });
-        wrap.appendChild(list);
-      }
+      // Group by fantasy team, sorted by total points desc
+      const byTeam = {};
+      S.teams.forEach(t => { byTeam[t.name] = { team:t, players:[], total:0 }; });
+      (S.ydResults||[]).forEach(r => {
+        if(byTeam[r.fantasyTeam]) {
+          byTeam[r.fantasyTeam].players.push(r);
+          byTeam[r.fantasyTeam].total += r.stat;
+        }
+      });
+      const teamGroups = Object.values(byTeam).sort((a,b) => b.total - a.total || a.team.name.localeCompare(b.team.name));
+      const list = h("div",{style:{display:"flex",flexDirection:"column",gap:"10px",marginBottom:"20px"}});
+      teamGroups.forEach(group => {
+        const teamCard = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",overflow:"hidden"}});
+        // Team header row
+        const hdr = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:group.players.length>0?`1px solid ${C.border}33`:"none"}});
+        const hdrLeft = h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
+        const logoUrl = teamLogoDataUrl(group.team.id);
+        if(logoUrl){const li=document.createElement("img");li.src=logoUrl;li.style.cssText="width:24px;height:24px;border-radius:6px;flex-shrink:0;";hdrLeft.appendChild(li);}
+        hdrLeft.appendChild(h("div",{style:{color:C.text,fontWeight:"700",fontSize:"14px"}},group.team.name));
+        hdr.appendChild(hdrLeft);
+        if(group.total>0) hdr.appendChild(h("div",{style:{color:C.accent,fontFamily:"'Bebas Neue',sans-serif",fontSize:"22px",fontWeight:"800"}},`+${group.total}`));
+        teamCard.appendChild(hdr);
+        if(group.players.length===0) {
+          teamCard.appendChild(h("div",{style:{padding:"10px 16px",color:C.muted,fontSize:"12px",fontStyle:"italic"}},"Better luck tomorrow!"));
+        } else {
+          group.players.forEach(r => {
+            const color = r.type==="hr"?C.red:C.green;
+            const row = h("div",{class:"row-hover",style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 16px",cursor:"pointer"},onClick:()=>openSpotlight(r.name,r.fantasyTeam,r.type)});
+            const nameWrap = h("div",{style:{color:C.text,fontWeight:"600",fontSize:"14px"}},r.name);
+            if(r.teamAbbr) nameWrap.appendChild(h("span",{style:{color:C.muted,fontWeight:"400",fontSize:"12px"}},` (${r.teamAbbr})`));
+            row.appendChild(nameWrap);
+            const right = h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
+            right.appendChild(badge(r.type==="hr"?"HR":"HBP",color));
+            right.appendChild(h("span",{style:{color,fontFamily:"'Bebas Neue',sans-serif",fontSize:"28px",fontWeight:"800",lineHeight:"1"}},r.stat));
+            row.appendChild(right);
+            teamCard.appendChild(row);
+          });
+        }
+        list.appendChild(teamCard);
+      });
+      wrap.appendChild(list);
+      {
       wrap.appendChild(h("button",{style:{width:"100%",padding:"10px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:"8px",color:C.muted,cursor:"pointer",fontSize:"13px"},onClick:loadYesterday},"⟳ Refresh"));
     }
     return wrap;
