@@ -831,14 +831,18 @@ function buildLeaderboard() {
   } else if(filter==="hr") {
     filtered = [...all].filter(p=>p.type==="hr").sort((a,b)=>b.pts-a.pts).slice(0,20);
     title = "Top 20 · Home Runs"; statLabel = "HR";
-  } else {
+  } else if(filter==="hbp") {
     filtered = [...all].filter(p=>p.type==="hbp").sort((a,b)=>b.pts-a.pts);
-    title = "All 8 HBP Players · Ranked"; statLabel = "HBP";
+    title = "HBP Players · Ranked"; statLabel = "HBP";
+  } else {
+    filtered = [...all].sort((a,b)=>b.pts-a.pts).slice(0,20);
+    title = "Top 20 · Total Points"; statLabel = null;
   }
   // MLB All scope
   if(scope === "mlb") {
     if(S.mlbLeadersLoading) { wrap.appendChild(spinner("Loading MLB leaders…")); return wrap; }
-    if(!S.mlbLeaders) { wrap.appendChild(spinner("Loading MLB leaders…")); fetchMLBLeaders(); return wrap; }
+    if(!S.mlbLeaders && !S.mlbLeadersLoading) { fetchMLBLeaders(); }
+    if(!S.mlbLeaders) { wrap.appendChild(spinner("Loading MLB leaders…")); return wrap; }
     // Build a set of all drafted player names for quick lookup
     const draftedMap = {};
     S.teams.forEach(t => (t.players||[]).forEach(p => { if(p.name) draftedMap[p.name] = t.name; }));
@@ -872,7 +876,7 @@ function buildLeaderboard() {
     return wrap;
   }
 
-  if(filtered.length > 0) {
+  if(filtered !== undefined) {
     const maxP = Math.max(...filtered.map(p=>p.pts),1);
     wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"10px"}},title));
     const plist = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",overflow:"hidden"}});
