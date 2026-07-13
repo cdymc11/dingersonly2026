@@ -391,6 +391,7 @@ let S = {
   wkResults: null, wkLoading: false, wkDone: false,
   recentView: "yesterday",
   lbFilter: "pts",
+  mlbLeaders: null, mlbLeadersLoading: false,
   // scores
   scResults: null, scLoading: false, scDone: false,
   // up to bat
@@ -732,18 +733,38 @@ function buildStandings() {
 }
 
 // ── Leaderboard ───────────────────────────────────────────────────────────────
+
+async function fetchMLBLeaders() {
+  if(S.mlbLeaders || S.mlbLeadersLoading) return;
+  set({mlbLeadersLoading: true});
+  try {
+    const r = await fetch("https://statsapi.mlb.com/api/v1/stats/leaders?leaderCategories=homeRuns&season=2026&limit=50&sportId=1");
+    const d = await r.json();
+    const leaders = (d.leagueLeaders?.[0]?.leaders || []).map(l => ({
+      rank: l.rank,
+      name: l.person?.fullName || "—",
+      playerId: l.person?.id || null,
+      teamAbbr: l.team?.abbreviation || "—",
+      hr: l.value || 0,
+    }));
+    set({mlbLeaders: leaders, mlbLeadersLoading: false});
+  } catch(e) {
+    set({mlbLeadersLoading: false});
+  }
+}
+
 function buildLeaderboard() {
   const filter = S.lbFilter || "pts";
   const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
   const filterRow = h("div",{style:{display:"flex",gap:"8px",marginBottom:"16px"}});
-  [["pts","Total"],["hr","HR Only"],["hbp","HBP Only"]].forEach(([id,lbl])=>{
+  [["pts","Total"],["hr","HR Only"],["hbp","HBP Only"],["mlb","⚾ MLB Top 50"]].forEach(([id,lbl])=>{
     const active = filter===id;
     filterRow.appendChild(h("button",{
       style:{flex:"1",padding:"7px 4px",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",
         background:active?C.accent:"transparent",
         border:`1px solid ${active?C.accent:C.border}`,
         color:active?"#000":C.muted},
-      onClick:()=>set({lbFilter:id})
+      onClick:()=>{ set({lbFilter:id}); if(id==="mlb") fetchMLBLeaders(); }
     },lbl));
   });
   wrap.appendChild(filterRow);
@@ -764,6 +785,42 @@ function buildLeaderboard() {
     filtered = [...all].filter(p=>p.type==="hbp").sort((a,b)=>b.pts-a.pts);
     title = "All 8 HBP Players · Ranked"; statLabel = "HBP";
   }
+  // MLB Top 50 filter
+  if(filter === "mlb") {
+    if(S.mlbLeadersLoading) { wrap.appendChild(spinner("Loading MLB leaders…")); return wrap; }
+    if(!S.mlbLeaders) { wrap.appendChild(spinner("Loading MLB leaders…")); fetchMLBLeaders(); return wrap; }
+    // Build a set of all drafted player names for quick lookup
+    const draftedMap = {};
+    S.teams.forEach(t => (t.players||[]).forEach(p => { if(p.name) draftedMap[p.name] = t.name; }));
+    wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"10px"}},"MLB Top 50 · Home Runs"));
+    const plist = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",overflow:"hidden"}});
+    const maxHR = Math.max(...S.mlbLeaders.map(l=>l.hr), 1);
+    S.mlbLeaders.forEach((l,i) => {
+      const isDrafted = !!draftedMap[l.name];
+      const fantasyTeam = draftedMap[l.name] || null;
+      const row = h("div",{class:"row-hover",style:{padding:"12px 18px",borderBottom:i<S.mlbLeaders.length-1?`1px solid ${C.border}33`:"none",cursor:"pointer"},
+        onClick:()=>{ if(l.playerId) openSpotlight(l.name, fantasyTeam||"MLB", "hr"); }});
+      const tr = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}});
+      const nameWrap = h("span",{style:{color:C.text,fontSize:"14px",fontWeight:"600"}},l.name);
+      nameWrap.appendChild(h("span",{style:{color:C.muted,fontWeight:"400"}},` (${l.teamAbbr})`));
+      if(isDrafted) nameWrap.appendChild(h("span",{style:{fontSize:"10px",marginLeft:"5px",color:C.accent,fontWeight:"700"}},"✓ drafted"));
+      const right = h("div",{style:{display:"flex",alignItems:"center",gap:"8px"}});
+      right.appendChild(h("span",{style:{color:C.muted,fontSize:"10px",textTransform:"uppercase",fontWeight:"600"}},"HR"));
+      right.appendChild(h("span",{style:{color:C.red,fontFamily:"'Bebas Neue', sans-serif",fontSize:"24px",fontWeight:"800"}},l.hr));
+      tr.appendChild(h("div",{style:{display:"flex",alignItems:"center",gap:"10px"}},
+        h("span",{style:{color:C.muted,fontSize:"12px",minWidth:"24px",fontWeight:"700"}},`#${l.rank}`),
+        h("div",{},nameWrap, fantasyTeam ? h("div",{style:{color:C.accent,fontSize:"11px",marginTop:"2px"}},fantasyTeam) : h("div",{style:{color:C.muted,fontSize:"11px",marginTop:"2px"}},"Undrafted"))
+      ));
+      tr.appendChild(right);
+      const bw = h("div",{style:{height:"3px",background:C.bg,borderRadius:"2px",overflow:"hidden"}});
+      bw.appendChild(h("div",{style:{height:"100%",width:`${(l.hr/maxHR)*100}%`,background:isDrafted?C.accent+"88":C.red+"44",borderRadius:"2px"}}));
+      row.append(tr,bw);
+      plist.appendChild(row);
+    });
+    wrap.appendChild(plist);
+    return wrap;
+  }
+
   if(filtered.length > 0) {
     const maxP = Math.max(...filtered.map(p=>p.pts),1);
     wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"10px"}},title));
