@@ -799,7 +799,7 @@ function buildLeaderboard() {
       const isDrafted = !!draftedMap[l.name];
       const fantasyTeam = draftedMap[l.name] || null;
       const row = h("div",{class:"row-hover",style:{padding:"12px 18px",borderBottom:i<S.mlbLeaders.length-1?`1px solid ${C.border}33`:"none",cursor:"pointer"},
-        onClick:()=>{ if(l.playerId) openSpotlight(l.name, fantasyTeam||"MLB", "hr"); }});
+        onClick:()=>{ if(l.playerId) openSpotlight(l.name, fantasyTeam||"MLB", "hr", l.playerId); }});
       const tr = h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}});
       const nameWrap = h("span",{style:{color:C.text,fontSize:"14px",fontWeight:"600"}},l.name);
       nameWrap.appendChild(h("span",{style:{color:C.muted,fontWeight:"400"}},` (${l.teamAbbr})`));
@@ -1840,9 +1840,9 @@ async function runDebug() {
 }
 
 // ── Rosters ───────────────────────────────────────────────────────────────────
-async function openSpotlight(playerName, fantasyTeam, type) {
-  set({spotlightPlayer:{name:playerName, fantasyTeam, type}, spotlightData:null, spotlightLoading:true});
-  const playerId = PLAYER_IDS[playerName];
+async function openSpotlight(playerName, fantasyTeam, type, mlbId=null) {
+  set({spotlightPlayer:{name:playerName, fantasyTeam, type, mlbId: PLAYER_IDS[playerName]||mlbId}, spotlightData:null, spotlightLoading:true});
+  const playerId = PLAYER_IDS[playerName] || mlbId;
   if(!playerId) { set({spotlightLoading:false}); return; }
   const season = new Date().getFullYear();
   try {
@@ -1882,7 +1882,7 @@ function buildSpotlightModal() {
   const modalFooter = h("div",{style:{padding:"12px 20px 20px",flexShrink:"0"}});
 
   // Header with headshot
-  const playerId = PLAYER_IDS[sp.name] || null;
+  const playerId = PLAYER_IDS[sp.name] || sp.mlbId || null;
   const headshotUrl = playerId ? `https://img.mlbstatic.com/mlb-photos/image/upload/w_180,q_100/v1/people/${playerId}/headshot/67/current` : null;
   const teamAbbr = (sp.teamAbbr || "").toLowerCase();
   const teamLogoUrl = teamAbbr ? `https://a.espncdn.com/i/teamlogos/mlb/500/${teamAbbr}.png` : null;
