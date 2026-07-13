@@ -392,6 +392,7 @@ let S = {
   recentView: "yesterday",
   lbFilter: "pts",
   mlbLeaders: null, mlbLeadersLoading: false,
+  teamGamesPlayed: {}, // { "PHI": 90, "HOU": 88, ... } loaded from standings API
   mlbScope: "league", // "league" | "mlb"
   // scores
   scResults: null, scLoading: false, scDone: false,
@@ -734,6 +735,37 @@ function buildStandings() {
 }
 
 // ── Leaderboard ───────────────────────────────────────────────────────────────
+
+
+// MLB team abbreviation to team ID lookup
+const MLB_TEAM_IDS = {
+  "ARI":109,"ATL":144,"BAL":110,"BOS":111,"CHC":112,"CWS":145,"CIN":113,
+  "CLE":114,"COL":115,"DET":116,"HOU":117,"KC":118,"LAA":108,"LAD":119,
+  "MIA":146,"MIL":158,"MIN":142,"NYM":121,"NYY":147,"ATH":133,"PHI":143,
+  "PIT":134,"SD":135,"SF":137,"SEA":136,"STL":138,"TB":139,"TEX":140,
+  "TOR":141,"WSH":120
+};
+
+async function fetchTeamGamesPlayed() {
+  try {
+    const r = await fetch("https://statsapi.mlb.com/api/v1/standings?leagueId=103,104&season=2026&standingsTypes=regularSeason&sportId=1");
+    if(!r.ok) throw new Error("standings fetch failed");
+    const d = await r.json();
+    const gamesMap = {};
+    (d.records || []).forEach(division => {
+      (division.teamRecords || []).forEach(tr => {
+        const abbr = tr.team?.abbreviation;
+        const gp = (tr.wins || 0) + (tr.losses || 0);
+        if(abbr) gamesMap[abbr] = gp;
+      });
+    });
+    set({ teamGamesPlayed: gamesMap });
+    return gamesMap;
+  } catch(e) {
+    console.warn("fetchTeamGamesPlayed failed, using fallback multiplier");
+    return {};
+  }
+}
 
 async function fetchMLBLeaders() {
   if(S.mlbLeaders || S.mlbLeadersLoading) return;
@@ -1134,7 +1166,18 @@ function buildProjected() {
   const seasonStart = new Date("2026-03-26");
   const today = new Date();
   const daysPassed = Math.max(1, Math.floor((today - seasonStart) / (1000*60*60*24)));
-  const gamesPlayed = Math.min(Math.round(daysPassed * 0.92), TOTAL_GAMES);
+  // Use per-team games played from standings API if available, fallback to 0.87 multiplier
+  const getTeamGP = (abbr) => {
+    if(S.teamGamesPlayed && S.teamGamesPlayed[abbr]) return S.teamGamesPlayed[abbr];
+    return Math.min(Math.round(daysPassed * 0.87), TOTAL_GAMES);
+  };
+  // Default gamesPlayed uses average across drafted players' teams
+  const allAbbrs = [];
+  team.players.forEach(p => { if(p.teamAbbr && !p.droppedAt) allAbbrs.push(p.teamAbbr); });
+  const avgGP = allAbbrs.length > 0
+    ? Math.round(allAbbrs.reduce((sum,a) => sum + getTeamGP(a), 0) / allAbbrs.length)
+    : Math.min(Math.round(daysPassed * 0.87), TOTAL_GAMES);
+  const gamesPlayed = avgGP;
   const gamesRemaining = TOTAL_GAMES - gamesPlayed;
   // Weight: how much to trust actual pace vs preseason projection
   // Starts at 0.1 (10% pace, 90% preseason), reaches 0.9 by game 145
@@ -1161,15 +1204,19 @@ function buildProjected() {
       const baseline = p.addedAt ? (p.type==="hr" ? (p.hrBaseline||0) : (p.hbpBaseline||0)) : 0;
       const totalSeasonStats = actual + baseline; // full season HR/HBP total
 
+      // Use per-player team's actual games played if available
+      const playerGP = p.teamAbbr ? getTeamGP(p.teamAbbr) : gamesPlayed;
+      const playerGR = TOTAL_GAMES - playerGP;
+
       if(preseason === null) {
-        const rate = totalSeasonStats / Math.max(gamesPlayed, 1);
-        projectedScore += rate * gamesRemaining;
+        const rate = totalSeasonStats / Math.max(playerGP, 1);
+        projectedScore += rate * playerGR;
       } else {
         // Blended projection of full season total
-        const paceRate = totalSeasonStats / Math.max(gamesPlayed, 1);
-        const paceRemaining = paceRate * gamesRemaining;
+        const paceRate = totalSeasonStats / Math.max(playerGP, 1);
+        const paceRemaining = paceRate * playerGR;
         const preseasonRate = preseason / TOTAL_GAMES;
-        const preseasonRemaining = preseasonRate * gamesRemaining;
+        const preseasonRemaining = preseasonRate * playerGR;
         const projSeasonTotal = totalSeasonStats + (paceWeight * paceRemaining) + (projWeight * preseasonRemaining);
         // Team contribution remaining = projected season total minus baseline minus already scored
         projectedScore += projSeasonTotal - totalSeasonStats - baseline;
@@ -2051,15 +2098,26 @@ function buildProjectedTeamModal() {
     // For transaction players, use full season stats for pace
     const baseline = p.addedAt ? (p.type==="hr" ? (p.hrBaseline||0) : (p.hbpBaseline||0)) : 0;
     const totalSeasonStats = actual + baseline;
+    // Per-player team GP from standings API, fallback to 0.87 multiplier
+    const pSeasonStart = new Date("2026-03-26");
+    const pToday = new Date();
+    const pDaysPassed = Math.max(1, Math.floor((pToday - pSeasonStart) / (1000*60*60*24)));
+    const pPlayerGamesPlayed = (S.teamGamesPlayed && p.teamAbbr && S.teamGamesPlayed[p.teamAbbr])
+      ? S.teamGamesPlayed[p.teamAbbr]
+      : Math.min(Math.round(pDaysPassed * 0.87), TOTAL_GAMES);
+    const pPlayerGR = TOTAL_GAMES - pPlayerGamesPlayed;
+    const usePreseasonOnly = p.addedAt && actual === 0 && pPlayerGamesPlayed < 3;
     let projFinal;
     if(preseason === null) {
-      const rate = totalSeasonStats / Math.max(gamesPlayed, 1);
-      projFinal = actual + rate * gamesRemaining;
+      const rate = totalSeasonStats / Math.max(pPlayerGamesPlayed, 1);
+      projFinal = actual + rate * pPlayerGR;
+    } else if(usePreseasonOnly) {
+      projFinal = actual + (preseason / TOTAL_GAMES) * pPlayerGR;
     } else {
       // Blended projection of full season total
-      const paceRate = totalSeasonStats / Math.max(gamesPlayed, 1);
-      const paceRemaining = paceRate * gamesRemaining;
-      const preseasonRemaining = (preseason / TOTAL_GAMES) * gamesRemaining;
+      const paceRate = totalSeasonStats / Math.max(pPlayerGamesPlayed, 1);
+      const paceRemaining = paceRate * pPlayerGR;
+      const preseasonRemaining = (preseason / TOTAL_GAMES) * pPlayerGR;
       const projSeasonTotal = totalSeasonStats + (paceWeight * paceRemaining) + (projWeight * preseasonRemaining);
       // Display: projected team contribution = season total proj - baseline
       projFinal = projSeasonTotal - baseline;
@@ -2070,7 +2128,7 @@ function buildProjectedTeamModal() {
     const diff = preseason !== null ? Math.round(projSeasonForDiff) - preseason : null;
     let heat = "—";
     if(preseason && preseason > 0) {
-      const seasonPace = Math.round((totalSeasonStats / Math.max(gamesPlayed, 1)) * TOTAL_GAMES);
+      const seasonPace = Math.round((totalSeasonStats / Math.max(pPlayerGamesPlayed, 1)) * TOTAL_GAMES);
       const pct = (seasonPace - preseason) / preseason;
       if(pct >= 0.20) heat = "🔥🔥🔥";
       else if(pct >= 0) heat = "🔥🔥";
