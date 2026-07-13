@@ -2094,7 +2094,7 @@ function buildProjectedTeamModal() {
     players.forEach((p,i) => {
       const {actual, preseason, projFinal, diff, heat} = playerProj(p);
       const isLast = i === players.length - 1;
-      const row = h("div",{class:"row-hover",style:{display:"flex",alignItems:"center",gap:"4px",padding:"8px 16px",borderBottom:isLast?"none":`1px solid ${C.border}22`,cursor:"pointer"},onClick:()=>openSpotlight(p.name,team.name,p.type)});
+      const row = h("div",{class:"row-hover",style:{display:"flex",alignItems:"center",gap:"4px",padding:"8px 16px",borderBottom:isLast?"none":`1px solid ${C.border}22`,cursor:"pointer"},onClick:()=>{ set({projectedTeam:null}); setTimeout(()=>openSpotlight(p.name,team.name,p.type),50); }});
       row.appendChild(h("div",{style:{minWidth:"22px",fontSize:"13px",lineHeight:"1"}},heat));
       const nameCol = h("div",{style:{flex:"1",minWidth:0}});
       const nameEl = h("span",{style:{color:p.droppedAt?C.muted:C.text,fontWeight:"600",fontSize:"13px"}},p.name);
@@ -2165,7 +2165,7 @@ function buildTeamModal(team) {
   hrSec.appendChild(h("div",{style:{color:C.red,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"8px"}},"HR Players"));
   const hrList=h("div",{style:{background:C.bg,borderRadius:"10px",overflow:"hidden"}});
   hrPlayers.length===0?hrList.appendChild(h("div",{style:{color:C.muted,fontSize:"13px",padding:"10px"}},"No players yet.")):hrPlayers.forEach((p,i)=>{
-    const row=h("div",{class:"row-hover",style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 14px",borderBottom:i<hrPlayers.length-1?`1px solid ${C.border}22`:"none",opacity:p.droppedAt?"0.55":"1",cursor:"pointer"},onClick:()=>openSpotlight(p.name,team.name,p.type)});
+    const row=h("div",{class:"row-hover",style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"11px 14px",borderBottom:i<hrPlayers.length-1?`1px solid ${C.border}22`:"none",opacity:p.droppedAt?"0.55":"1",cursor:"pointer"},onClick:()=>{ set({projectedTeam:null}); setTimeout(()=>openSpotlight(p.name,team.name,p.type),50); }});
     const nd=h("div",{},playerName(p));
     if(p.droppedAt) nd.appendChild(h("span",{style:{color:C.muted,fontSize:"11px",marginLeft:"6px"}},`(dropped ${fmtDate(p.droppedAt)})`));
     if(p.addedAt) nd.appendChild(h("span",{style:{color:C.green,fontSize:"11px",marginLeft:"6px"}},`(added ${fmtDate(p.addedAt)})`));
