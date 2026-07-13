@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <meta name="apple-mobile-web-app-title" content="Dingers Only"/>
@@ -800,7 +801,7 @@ function buildLeaderboard() {
         background:active?C.accent:"transparent",
         border:`1px solid ${active?C.accent:C.border}`,
         color:active?"#000":C.muted},
-      onClick:()=>set({lbFilter:id})
+      onClick:()=>set({lbFilter:id, mlbScope: id==="hbp" ? "league" : S.mlbScope})
     },lbl));
   });
   wrap.appendChild(filterRow);
@@ -824,9 +825,7 @@ function buildLeaderboard() {
     const pts = p.type==="hr" ? (p.effectiveHR||0) : (p.effectiveHBP||0);
     all.push({name:p.name, teamAbbr:p.teamAbbr, pts, type:p.type, fantasyTeam:team.name, dropped:false, added:!!p.addedAt});
   }));
-  console.log("LB all players:", all.length, "HBP players:", all.filter(p=>p.type==="hbp").length);
-  console.log("LB filter:", filter, "scope:", scope);
-  console.log("mlbLeaders:", S.mlbLeaders?.length||0);
+
   let filtered, title, statLabel;
   if(filter==="pts") {
     filtered = [...all].sort((a,b)=>b.pts-a.pts).slice(0,20);
@@ -841,8 +840,8 @@ function buildLeaderboard() {
     filtered = [...all].sort((a,b)=>b.pts-a.pts).slice(0,20);
     title = "Top 20 · Total Points"; statLabel = null;
   }
-  // MLB All scope
-  if(scope === "mlb") {
+  // MLB All scope — only applies for HR/Total filters, not HBP
+  if(scope === "mlb" && filter !== "hbp") {
     if(S.mlbLeadersLoading) { wrap.appendChild(spinner("Loading MLB leaders…")); return wrap; }
     if(!S.mlbLeaders && !S.mlbLeadersLoading) { fetchMLBLeaders(); }
     if(!S.mlbLeaders) { wrap.appendChild(spinner("Loading MLB leaders…")); return wrap; }
