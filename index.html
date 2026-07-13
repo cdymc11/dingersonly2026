@@ -392,6 +392,7 @@ let S = {
   recentView: "yesterday",
   lbFilter: "pts",
   mlbLeaders: null, mlbLeadersLoading: false,
+  mlbScope: "league", // "league" | "mlb"
   // scores
   scResults: null, scLoading: false, scDone: false,
   // up to bat
@@ -755,19 +756,36 @@ async function fetchMLBLeaders() {
 
 function buildLeaderboard() {
   const filter = S.lbFilter || "pts";
+  const scope = S.mlbScope || "league";
   const wrap = h("div",{style:{animation:"fadeIn 0.4s ease"}});
-  const filterRow = h("div",{style:{display:"flex",gap:"8px",marginBottom:"16px"}});
-  [["pts","Total"],["hr","HR Only"],["hbp","HBP Only"],["mlb","⚾ MLB Top 50"]].forEach(([id,lbl])=>{
+
+  // Row 1 — stat filter
+  const filterRow = h("div",{style:{display:"flex",gap:"8px",marginBottom:"8px"}});
+  [["pts","Total"],["hr","HR Only"],["hbp","HBP Only"]].forEach(([id,lbl])=>{
     const active = filter===id;
     filterRow.appendChild(h("button",{
       style:{flex:"1",padding:"7px 4px",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",
         background:active?C.accent:"transparent",
         border:`1px solid ${active?C.accent:C.border}`,
         color:active?"#000":C.muted},
-      onClick:()=>{ set({lbFilter:id}); if(id==="mlb") fetchMLBLeaders(); }
+      onClick:()=>set({lbFilter:id})
     },lbl));
   });
   wrap.appendChild(filterRow);
+
+  // Row 2 — scope filter
+  const scopeRow = h("div",{style:{display:"flex",gap:"8px",marginBottom:"16px"}});
+  [["league","Dingers Only"],["mlb","All MLB"]].forEach(([id,lbl])=>{
+    const active = scope===id;
+    scopeRow.appendChild(h("button",{
+      style:{flex:"1",padding:"7px 4px",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",
+        background:active?`${C.accent}22`:"transparent",
+        border:`1px solid ${active?C.accent:C.border}`,
+        color:active?C.accent:C.muted},
+      onClick:()=>{ set({mlbScope:id}); if(id==="mlb") fetchMLBLeaders(); }
+    },lbl));
+  });
+  wrap.appendChild(scopeRow);
   const all=[];
   S.teams.forEach(team=>(team.players||[]).filter(p=>p.name?.trim()).forEach(p=>{
     if(p.droppedAt) return; // skip dropped players
@@ -785,14 +803,15 @@ function buildLeaderboard() {
     filtered = [...all].filter(p=>p.type==="hbp").sort((a,b)=>b.pts-a.pts);
     title = "All 8 HBP Players · Ranked"; statLabel = "HBP";
   }
-  // MLB Top 50 filter
-  if(filter === "mlb") {
+  // MLB All scope
+  if(scope === "mlb") {
     if(S.mlbLeadersLoading) { wrap.appendChild(spinner("Loading MLB leaders…")); return wrap; }
     if(!S.mlbLeaders) { wrap.appendChild(spinner("Loading MLB leaders…")); fetchMLBLeaders(); return wrap; }
     // Build a set of all drafted player names for quick lookup
     const draftedMap = {};
     S.teams.forEach(t => (t.players||[]).forEach(p => { if(p.name) draftedMap[p.name] = t.name; }));
-    wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"10px"}},"MLB Top 50 · Home Runs"));
+    const mlbTitle = filter==="hbp" ? "MLB Top 50 · Home Runs (HBP not available league-wide)" : filter==="hr" ? "MLB Top 50 · Home Runs" : "MLB Top 50 · Home Runs";
+    wrap.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:"10px"}},mlbTitle));
     const plist = h("div",{style:{background:C.card,border:`1px solid ${C.border}`,borderRadius:"12px",overflow:"hidden"}});
     const maxHR = Math.max(...S.mlbLeaders.map(l=>l.hr), 1);
     S.mlbLeaders.forEach((l,i) => {
@@ -1843,7 +1862,6 @@ async function runDebug() {
 async function openSpotlight(playerName, fantasyTeam, type, mlbId=null) {
   set({spotlightPlayer:{name:playerName, fantasyTeam, type, mlbId: PLAYER_IDS[playerName]||mlbId}, spotlightData:null, spotlightLoading:true});
   const playerId = PLAYER_IDS[playerName] || mlbId || null;
-  if(playerId) console.log('openSpotlight playerId:', playerId, 'for', playerName);
   if(!playerId) { set({spotlightLoading:false}); return; }
   const season = new Date().getFullYear();
   try {
