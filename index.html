@@ -1166,19 +1166,9 @@ function buildProjected() {
   const seasonStart = new Date("2026-03-26");
   const today = new Date();
   const daysPassed = Math.max(1, Math.floor((today - seasonStart) / (1000*60*60*24)));
-  // Use per-team games played from standings API if available, fallback to 0.87 multiplier
-  const getTeamGP = (abbr) => {
-    if(S.teamGamesPlayed && S.teamGamesPlayed[abbr]) return S.teamGamesPlayed[abbr];
-    return Math.min(Math.round(daysPassed * 0.87), TOTAL_GAMES);
-  };
-  // Default gamesPlayed uses average across drafted players' teams
-  const allAbbrs = [];
-  team.players.forEach(p => { if(p.teamAbbr && !p.droppedAt) allAbbrs.push(p.teamAbbr); });
-  const avgGP = allAbbrs.length > 0
-    ? Math.round(allAbbrs.reduce((sum,a) => sum + getTeamGP(a), 0) / allAbbrs.length)
-    : Math.min(Math.round(daysPassed * 0.87), TOTAL_GAMES);
-  const gamesPlayed = avgGP;
+  const gamesPlayed = Math.min(Math.round(daysPassed * 0.87), TOTAL_GAMES);
   const gamesRemaining = TOTAL_GAMES - gamesPlayed;
+  const getTeamGP = (abbr) => gamesPlayed; // simplified - per-team approach coming later
   // Weight: how much to trust actual pace vs preseason projection
   // Starts at 0.1 (10% pace, 90% preseason), reaches 0.9 by game 145
   const paceWeight = Math.min(0.9, gamesPlayed / TOTAL_GAMES * 1.6);
@@ -1204,9 +1194,8 @@ function buildProjected() {
       const baseline = p.addedAt ? (p.type==="hr" ? (p.hrBaseline||0) : (p.hbpBaseline||0)) : 0;
       const totalSeasonStats = actual + baseline; // full season HR/HBP total
 
-      // Use per-player team's actual games played if available
-      const playerGP = p.teamAbbr ? getTeamGP(p.teamAbbr) : gamesPlayed;
-      const playerGR = TOTAL_GAMES - playerGP;
+      const playerGP = gamesPlayed;
+      const playerGR = gamesRemaining;
 
       if(preseason === null) {
         const rate = totalSeasonStats / Math.max(playerGP, 1);
@@ -2098,13 +2087,10 @@ function buildProjectedTeamModal() {
     // For transaction players, use full season stats for pace
     const baseline = p.addedAt ? (p.type==="hr" ? (p.hrBaseline||0) : (p.hbpBaseline||0)) : 0;
     const totalSeasonStats = actual + baseline;
-    // Per-player team GP from standings API, fallback to 0.87 multiplier
     const pSeasonStart = new Date("2026-03-26");
     const pToday = new Date();
     const pDaysPassed = Math.max(1, Math.floor((pToday - pSeasonStart) / (1000*60*60*24)));
-    const pPlayerGamesPlayed = (S.teamGamesPlayed && p.teamAbbr && S.teamGamesPlayed[p.teamAbbr])
-      ? S.teamGamesPlayed[p.teamAbbr]
-      : Math.min(Math.round(pDaysPassed * 0.87), TOTAL_GAMES);
+    const pPlayerGamesPlayed = Math.min(Math.round(pDaysPassed * 0.87), TOTAL_GAMES);
     const pPlayerGR = TOTAL_GAMES - pPlayerGamesPlayed;
     const usePreseasonOnly = p.addedAt && actual === 0 && pPlayerGamesPlayed < 3;
     let projFinal;
