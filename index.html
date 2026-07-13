@@ -1842,7 +1842,8 @@ async function runDebug() {
 // ── Rosters ───────────────────────────────────────────────────────────────────
 async function openSpotlight(playerName, fantasyTeam, type, mlbId=null) {
   set({spotlightPlayer:{name:playerName, fantasyTeam, type, mlbId: PLAYER_IDS[playerName]||mlbId}, spotlightData:null, spotlightLoading:true});
-  const playerId = PLAYER_IDS[playerName] || mlbId;
+  const playerId = PLAYER_IDS[playerName] || mlbId || null;
+  if(playerId) console.log('openSpotlight playerId:', playerId, 'for', playerName);
   if(!playerId) { set({spotlightLoading:false}); return; }
   const season = new Date().getFullYear();
   try {
@@ -1940,6 +1941,8 @@ function buildSpotlightModal() {
     modalBody.appendChild(spinner("Loading player stats…"));
   } else if(!sd) {
     modalBody.appendChild(h("div",{style:{color:C.muted,fontSize:"13px",textAlign:"center",padding:"20px"}},"Stats unavailable for this player."));
+  } else if(sd && Object.keys(sd.season||{}).length === 0 && (sd.last3Games||[]).length === 0) {
+    modalBody.appendChild(h("div",{style:{color:C.muted,fontSize:"13px",textAlign:"center",padding:"20px"}},"No stats available yet for this player."));
   } else {
     // Season stats
     modalBody.appendChild(h("div",{style:{color:C.muted,fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:"10px"}},"2026 Season"));
