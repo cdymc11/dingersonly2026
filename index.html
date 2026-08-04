@@ -528,8 +528,8 @@ async function saveToFirebase(teams) {
 // ── MLB Stats refresh ─────────────────────────────────────────────────────────
 async function refreshAllStats() {
   set({ refreshing: true, refreshStatus: "Fetching stats…" });
-  // Work from HARDCODED_TEAMS only — transaction players handled separately
-  const updated = JSON.parse(JSON.stringify(HARDCODED_TEAMS));
+  // Work from S.teams (live Firebase data) — transaction players handled separately
+  const updated = JSON.parse(JSON.stringify(S.teams));
   // Also update transaction player stats separately
   const txUpdates = {}; // { txId: { effectiveHR/HBP, teamAbbr } }
 
