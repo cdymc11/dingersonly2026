@@ -334,6 +334,7 @@ const PLAYER_IDS = {
   "Sal Stewart":           701398,
   "Spencer Torkelson":     679529,
   "Mickey Moniak":         666160,
+  "Miguel Vargas":          678246,
 };
 
 async function fetchStats(name) {
@@ -573,6 +574,12 @@ async function refreshAllStats() {
       const baseline = tx.hbpBaseline ?? s.hbp;
       txUpdates[txId] = { effectiveHBP: Math.max(0, s.hbp - baseline), teamAbbr: s.teamAbbr };
     }
+    // Auto-update teamAbbr in transactions/ collection if player was traded
+    if(s.teamAbbr && s.teamAbbr !== tx.teamAbbr) {
+      try {
+        await setDoc(doc(db, "transactions", txId), { teamAbbr: s.teamAbbr }, { merge: true });
+      } catch(e) { console.warn("Failed to update teamAbbr for", tx.addedPlayer); }
+    }
   }
 
   // Save stat-only data to league/data
@@ -810,12 +817,14 @@ function buildLeaderboard() {
   const scopeRow = h("div",{style:{display:"flex",gap:"8px",marginBottom:"16px"}});
   [["league","Dingers Only"],["mlb","All MLB"]].forEach(([id,lbl])=>{
     const active = scope===id;
+    const disabled = id==="mlb" && filter==="hbp";
     scopeRow.appendChild(h("button",{
-      style:{flex:"1",padding:"7px 4px",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:"700",
-        background:active?`${C.accent}22`:"transparent",
-        border:`1px solid ${active?C.accent:C.border}`,
-        color:active?C.accent:C.muted},
-      onClick:()=>{ set({mlbScope:id}); if(id==="mlb") fetchMLBLeaders(); }
+      style:{flex:"1",padding:"7px 4px",borderRadius:"8px",cursor:disabled?"not-allowed":"pointer",fontSize:"12px",fontWeight:"700",
+        background:active&&!disabled?`${C.accent}22`:"transparent",
+        border:`1px solid ${active&&!disabled?C.accent:C.border}`,
+        color:disabled?C.border:active?C.accent:C.muted,
+        opacity:disabled?"0.4":"1"},
+      onClick:()=>{ if(disabled) return; set({mlbScope:id}); if(id==="mlb") fetchMLBLeaders(); }
     },lbl));
   });
   wrap.appendChild(scopeRow);
