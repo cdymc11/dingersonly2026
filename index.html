@@ -523,6 +523,7 @@ async function saveToFirebase(teams) {
     return { ...t, name: hc.name, owner: hc.owner, hasUsedTransaction: false, players };
   });
   await setDoc(leagueRef, { teams: corrected, lastUpdated: now });
+  set({ lastUpdated: now });
 }
 
 // ── MLB Stats refresh ─────────────────────────────────────────────────────────
