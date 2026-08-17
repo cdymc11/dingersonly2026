@@ -545,7 +545,6 @@ async function refreshAllStats() {
       if(!p.name?.trim()) continue;
       // Skip dropped players — their stats are frozen at time of drop
       if(droppedByTeam[t.id]?.has(p.name)) {
-        // Preserve their last known stats from Firebase
         const fbTeam = S.teams.find(ft => ft.id === t.id);
         const fbPlayer = fbTeam?.players.find(fp => fp.name === p.name);
         if(fbPlayer) {
@@ -555,6 +554,9 @@ async function refreshAllStats() {
         }
         continue;
       }
+      // Skip transaction-added players — handled separately below with baseline logic
+      const isTransactionPlayer = S.transactions.some(tx => tx.addedPlayer === p.name && tx.teamId === t.id);
+      if(isTransactionPlayer) continue;
       const s = await fetchStats(p.name); if(!s) continue;
       if(p.type==="hr") p.effectiveHR = s.hr;
       if(p.type==="hbp") p.effectiveHBP = s.hbp;
