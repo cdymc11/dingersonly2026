@@ -2616,23 +2616,9 @@ loadTransactions().then(() => {
     if(snap.exists()) {
       const data = snap.data();
       if(data.teams?.length > 0) {
-        const merged = JSON.parse(JSON.stringify(HARDCODED_TEAMS));
-        merged.forEach(team => {
-          const saved = data.teams.find(t => t.id === team.id);
-          if(!saved) return;
-          team.players.forEach(p => {
-            const sp = saved.players?.find(s => s.name === p.name);
-            if(!sp) return;
-            if(p.type === "hr") {
-              p.effectiveHR = sp.effectiveHR || 0;
-              if(sp.teamAbbr) p.teamAbbr = sp.teamAbbr;
-            }
-            if(p.type === "hbp") {
-              p.effectiveHBP = sp.effectiveHBP || 0;
-              if(sp.teamAbbr) p.teamAbbr = sp.teamAbbr;
-            }
-          });
-        });
+        // Use saved teams directly from Firebase (includes stats)
+        const merged = data.teams.map(t => ({...t, players: (t.players||[]).map(p => ({...p}))}));
+        // Apply transactions on top — adds dropped flags and transaction players
         const withTx = applyTransactions(merged, S.transactions);
         set({ teams: withTx, lastUpdated: data.lastUpdated||null });
         maybeAutoSnapshot();
